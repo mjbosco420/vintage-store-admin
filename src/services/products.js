@@ -79,9 +79,9 @@ const sortProducts = (products) => {
   return [...available, ...sold]
 }
 
-export const fetchProducts = async () => {
+export const fetchProducts = async (userId) => {
   const savedLikes = getSavedLikes()
-  const likedProducts = getLikedProducts()
+  const likedProducts = getLikedProducts(userId)
   const products = await client.fetch(PRODUCT_QUERY)
 
   return sortProducts(products.map((product) => mapProduct(product, savedLikes, likedProducts)))

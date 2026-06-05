@@ -44,7 +44,6 @@ export default function StreetwearStore() {
     address: '',
     notes: '',
   })
-  const { products, isLoading, loadProducts, handleLike, handleViewProduct } = useProducts()
   const {
     authError,
     clearAuthError,
@@ -54,6 +53,7 @@ export default function StreetwearStore() {
     resetPassword,
     signUp,
   } = useAuth()
+  const { products, isLoading, loadProducts, handleLike, handleViewProduct } = useProducts(currentUser)
   const {
     cartItems,
     cartCount,

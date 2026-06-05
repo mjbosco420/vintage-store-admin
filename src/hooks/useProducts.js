@@ -3,40 +3,27 @@ import { fetchProducts, updateProductLike, updateProductViews } from '../service
 import { saveLikedProducts, saveProductLikes } from '../utils/storage'
 import { client } from '../sanity'
 
-export const useProducts = () => {
+export const useProducts = (currentUser) => {
   const [products, setProducts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const userId = currentUser?.id
 
   const loadProducts = useCallback(async () => {
     setIsLoading(true)
 
     try {
-      const data = await fetchProducts()
+      const data = await fetchProducts(userId)
       setProducts(data)
     } catch (error) {
       console.error('Failed to load products:', error)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     let isMounted = true
-
-    fetchProducts()
-      .then((data) => {
-        if (isMounted) {
-          setProducts(data)
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to load products:', error)
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      })
 
     // Listen for real-time updates from Sanity
     const subscription = client.listen('*[_type == "product"]').subscribe((update) => {
@@ -62,7 +49,11 @@ export const useProducts = () => {
       isMounted = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [userId])
+
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
 
   const handleLike = (productId) => {
     const product = products.find((p) => p.id === productId)
@@ -84,7 +75,7 @@ export const useProducts = () => {
       })
 
       saveProductLikes(updated)
-      saveLikedProducts(updated)
+      saveLikedProducts(updated, userId)
       return updated
     })
 
@@ -92,18 +83,21 @@ export const useProducts = () => {
     updateProductLike(productId, isNowLiked)
   }
 
-  const handleViewProduct = useCallback((productId) => {
-    const product = products.find((p) => p.id === productId)
-    if (!product) return
+  const handleViewProduct = useCallback(
+    (productId) => {
+      const product = products.find((p) => p.id === productId)
+      if (!product) return
 
-    setProducts((current) =>
-      current.map((item) =>
-        item.id === productId ? { ...item, views: (item.views || 0) + 1 } : item
+      setProducts((current) =>
+        current.map((item) =>
+          item.id === productId ? { ...item, views: (item.views || 0) + 1 } : item
+        )
       )
-    )
 
-    updateProductViews(productId)
-  }, [products])
+      updateProductViews(productId)
+    },
+    [products],
+  )
 
   return {
     products,

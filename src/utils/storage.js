@@ -3,6 +3,9 @@ const LIKED_PRODUCTS_KEY = 'likedProducts'
 const USER_ACCOUNTS_KEY = 'userAccounts'
 const CURRENT_USER_KEY = 'currentUser'
 const ORDER_SUMMARIES_KEY = 'orderSummaries'
+const ANONYMOUS_USER_ID = 'anonymous'
+
+const getUserLikeMapKey = (userId) => userId || ANONYMOUS_USER_ID
 
 export const getSavedLikes = () => {
   if (typeof window === 'undefined') return {}
@@ -15,11 +18,12 @@ export const getSavedLikes = () => {
   }
 }
 
-export const getLikedProducts = () => {
+export const getLikedProducts = (userId) => {
   if (typeof window === 'undefined') return {}
 
   try {
-    return JSON.parse(window.localStorage.getItem(LIKED_PRODUCTS_KEY) || '{}')
+    const savedLikesByUser = JSON.parse(window.localStorage.getItem(LIKED_PRODUCTS_KEY) || '{}')
+    return savedLikesByUser[getUserLikeMapKey(userId)] || {}
   } catch (error) {
     console.warn('Invalid likedProducts in localStorage, resetting.', error)
     return {}
@@ -37,7 +41,7 @@ export const saveProductLikes = (products) => {
   window.localStorage.setItem(PRODUCT_LIKES_KEY, JSON.stringify(likesMap))
 }
 
-export const saveLikedProducts = (products) => {
+export const saveLikedProducts = (products, userId) => {
   if (typeof window === 'undefined') return
 
   const likedMap = products.reduce((acc, item) => {
@@ -45,7 +49,9 @@ export const saveLikedProducts = (products) => {
     return acc
   }, {})
 
-  window.localStorage.setItem(LIKED_PRODUCTS_KEY, JSON.stringify(likedMap))
+  const savedLikesByUser = JSON.parse(window.localStorage.getItem(LIKED_PRODUCTS_KEY) || '{}')
+  savedLikesByUser[getUserLikeMapKey(userId)] = likedMap
+  window.localStorage.setItem(LIKED_PRODUCTS_KEY, JSON.stringify(savedLikesByUser))
 }
 
 export const getUserAccounts = () => {
