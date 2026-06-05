@@ -54,6 +54,14 @@ export const saveLikedProducts = (products, userId) => {
   window.localStorage.setItem(LIKED_PRODUCTS_KEY, JSON.stringify(savedLikesByUser))
 }
 
+export const clearLikedProducts = (userId) => {
+  if (typeof window === 'undefined') return
+
+  const savedLikesByUser = JSON.parse(window.localStorage.getItem(LIKED_PRODUCTS_KEY) || '{}')
+  savedLikesByUser[getUserLikeMapKey(userId)] = {}
+  window.localStorage.setItem(LIKED_PRODUCTS_KEY, JSON.stringify(savedLikesByUser))
+}
+
 export const getUserAccounts = () => {
   if (typeof window === 'undefined') return []
 

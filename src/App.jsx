@@ -53,7 +53,7 @@ export default function StreetwearStore() {
     resetPassword,
     signUp,
   } = useAuth()
-  const { products, isLoading, loadProducts, handleLike, handleViewProduct } = useProducts(currentUser)
+  const { products, isLoading, loadProducts, handleLike, handleViewProduct, clearWishlist } = useProducts(currentUser)
   const {
     cartItems,
     cartCount,
@@ -352,6 +352,7 @@ export default function StreetwearStore() {
         user={currentUser}
         wishlistProducts={wishlistProducts}
         onAddToCart={handleWishlistAddToCart}
+        onClearWishlist={clearWishlist}
         onClose={() => setIsMyOrderOpen(false)}
       />
     </div>

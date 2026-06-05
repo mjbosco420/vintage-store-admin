@@ -9,6 +9,10 @@ export const useProducts = (currentUser) => {
 
   const userId = currentUser?.id
 
+  useEffect(() => {
+    setProducts([])
+  }, [userId])
+
   const loadProducts = useCallback(async () => {
     setIsLoading(true)
 
@@ -99,11 +103,21 @@ export const useProducts = (currentUser) => {
     [products],
   )
 
+  const clearWishlist = () => {
+    setProducts((current) => {
+      const updated = current.map((item) => ({ ...item, isLiked: false }))
+      saveProductLikes(updated)
+      saveLikedProducts(updated, userId)
+      return updated
+    })
+  }
+
   return {
     products,
     isLoading,
     loadProducts,
     handleLike,
     handleViewProduct,
+    clearWishlist,
   }
 }
