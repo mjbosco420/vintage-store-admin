@@ -1,0 +1,87 @@
+commit 6096afdd43a858231b7f1ed362be38246d94438f
+Author: mj <muji2508420@gmail.com>
+Date:   Fri Jun 5 22:48:37 2026 +0700
+
+    Save current config and wishlist/cart modal fixes for rollback
+---
+ api/place-order.js | 12 ++++++++++--
+ src/App.jsx        | 14 ++++++++++++--
+ 2 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/api/place-order.js b/api/place-order.js
+index 3fb2fd9..5c2f04d 100644
+--- a/api/place-order.js
++++ b/api/place-order.js
+@@ -120,8 +120,16 @@ export default async function handler(req, res) {
+           timeZoneName: 'short',
+         }).format(orderDate)
+ 
++        const usdFormatter = new Intl.NumberFormat('en-US', {
++          style: 'currency',
++          currency: 'USD',
++        })
++        const USD_EXCHANGE_RATE = 16000
++
++        const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
++
+         const itemsHtml = emailItems
+-          .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - $${(item.price * item.quantity).toLocaleString()}</li>`)
++          .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - ${formatUsd(item.price * item.quantity)}</li>`)
+           .join('')
+ 
+         await transporter.verify()
+@@ -134,7 +142,7 @@ export default async function handler(req, res) {
+             <p>Your order <strong>${id}</strong> has been successfully placed. Here are the details of your purchase:</p>
+             <h3>Order Summary:</h3>
+             <ul>${itemsHtml}</ul>
+-            <p><strong>Total Paid:</strong> $${calculatedTotal.toLocaleString()}</p>
++            <p><strong>Total Paid:</strong> ${formatUsd(calculatedTotal)}</p>
+             <p><strong>Date of Purchase:</strong> ${formattedDate}</p>
+             <br/>
+             <p>Have a good day!</p>
+diff --git a/src/App.jsx b/src/App.jsx
+index ecd3b32..4db8488 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -186,6 +186,11 @@ export default function StreetwearStore() {
+     setIsAuthOpen(false)
+   }
+ 
++  const handleCartOpen = () => {
++    setIsMyOrderOpen(false)
++    openCart()
++  }
++
+   const handleOrderSubmitted = (summary) => {
+     setOrderSummaries((current) => {
+       const updated = [summary, ...current.filter((item) => item.id !== summary.id)]
+@@ -195,6 +200,11 @@ export default function StreetwearStore() {
+     setIsMyOrderOpen(true)
+   }
+ 
++  const handleWishlistAddToCart = (product) => {
++    addToCart(product)
++    setIsMyOrderOpen(false)
++  }
++
+   const handleWebCheckoutSubmit = async (orderPayload) => {
+     try {
+       // Tembak data ke jalur API Serverless (Vercel) yang aman
+@@ -219,7 +229,7 @@ export default function StreetwearStore() {
+       <Navbar
+         cartCount={cartCount}
+         currentUser={currentUser}
+-        onCartClick={openCart}
++        onCartClick={handleCartOpen}
+         onLogoClick={handleLogoClick}
+         onShopClick={handleShopClick}
+         onLoginClick={() => setIsAuthOpen(true)}
+@@ -299,7 +309,7 @@ export default function StreetwearStore() {
+         orderSummaries={orderSummaries}
+         user={currentUser}
+         wishlistProducts={wishlistProducts}
+-        onAddToCart={addToCart}
++        onAddToCart={handleWishlistAddToCart}
+         onClose={() => setIsMyOrderOpen(false)}
+       />
+     </div>

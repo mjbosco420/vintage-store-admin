@@ -24,7 +24,6 @@ const INITIAL_PRODUCT_LIMIT = 8
 
 export default function StreetwearStore() {
   const timeoutRef = useRef(null)
-  const bannerTimeoutRef = useRef(null)
   const [selectedProductId, setSelectedProductId] = useState(null)
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
@@ -36,8 +35,6 @@ export default function StreetwearStore() {
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isMyOrderOpen, setIsMyOrderOpen] = useState(false)
   const [isWebCheckoutOpen, setIsWebCheckoutOpen] = useState(false)
-  const [pendingCheckoutAfterAuth, setPendingCheckoutAfterAuth] = useState(false)
-  const [authBanner, setAuthBanner] = useState(null)
   const [orderSummaries, setOrderSummaries] = useState(() => getOrderSummaries())
   const [webCheckoutDetails, setWebCheckoutDetails] = useState({
     name: '',
@@ -51,7 +48,6 @@ export default function StreetwearStore() {
     currentUser,
     login,
     logout,
-    resetPassword,
     signUp,
   } = useAuth()
   const {
@@ -113,9 +109,6 @@ export default function StreetwearStore() {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
-      }
-      if (bannerTimeoutRef.current) {
-        clearTimeout(bannerTimeoutRef.current)
       }
     }
   }, [])
@@ -182,7 +175,6 @@ export default function StreetwearStore() {
 
     if (!currentUser) {
       clearAuthError()
-      setPendingCheckoutAfterAuth(true)
       setIsAuthOpen(true)
       return
     }
@@ -192,35 +184,6 @@ export default function StreetwearStore() {
 
   const handleAuthClose = () => {
     setIsAuthOpen(false)
-  }
-
-  const handleAuthSuccess = (user, mode) => {
-    setIsAuthOpen(false)
-    const title =
-      mode === 'signup'
-        ? `Welcome aboard, ${user.name}!`
-        : mode === 'reset'
-        ? `Password reset complete, welcome back, ${user.name}!`
-        : `Welcome back, ${user.name}!`
-
-    const subtitle =
-      mode === 'signup'
-        ? 'Your streetwear journey starts here. Let the fresh drops inspire your next fit.'
-        : 'Great to see you again. The latest drops are waiting in your cart.'
-
-    setAuthBanner({ title, subtitle })
-    if (bannerTimeoutRef.current) {
-      clearTimeout(bannerTimeoutRef.current)
-    }
-    bannerTimeoutRef.current = setTimeout(() => {
-      setAuthBanner(null)
-      bannerTimeoutRef.current = null
-    }, 5500)
-
-    if (pendingCheckoutAfterAuth) {
-      setPendingCheckoutAfterAuth(false)
-      setIsWebCheckoutOpen(true)
-    }
   }
 
   const handleCartOpen = () => {
@@ -275,13 +238,6 @@ export default function StreetwearStore() {
       />
       {showProjection && <ProjectionBadge />}
       <Hero categoryFilter={categoryFilter} onNewDropClick={() => handleCategoryClick('New Drop')} onShopNowClick={handleShopClick} />
-      {authBanner && (
-        <div className="fixed left-1/2 top-[5.5rem] z-[150] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-[28px] border border-white/10 bg-white/95 p-5 shadow-2xl text-slate-950 backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Welcome message</p>
-          <h3 className="mt-2 text-xl font-black">{authBanner.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{authBanner.subtitle}</p>
-        </div>
-      )}
       <CategoryFilter 
         activeCategory={categoryFilter} 
         onCategoryClick={handleCategoryClick} 
@@ -328,9 +284,11 @@ export default function StreetwearStore() {
         isOpen={isAuthOpen}
         onClose={handleAuthClose}
         onLogin={login}
-        onResetPassword={resetPassword}
         onSignUp={signUp}
-        onSuccess={handleAuthSuccess}
+        onSuccess={() => {
+          setIsAuthOpen(false)
+          setIsWebCheckoutOpen(true)
+        }}
       />
       <WebCheckoutModal
         buyerDetails={webCheckoutDetails}

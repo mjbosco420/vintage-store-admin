@@ -81,6 +81,36 @@ export const useAuth = () => {
     }
   }
 
+  const resetPassword = ({ email, password }) => {
+    try {
+      const normalizedEmail = email.trim().toLowerCase()
+      const accounts = getUserAccounts()
+      const accountIndex = accounts.findIndex((item) => item.email === normalizedEmail)
+
+      if (accountIndex === -1) {
+        setAuthError('No account found with that email address.')
+        return null
+      }
+
+      const updatedAccounts = [...accounts]
+      updatedAccounts[accountIndex] = {
+        ...updatedAccounts[accountIndex],
+        password,
+      }
+
+      const user = createPublicUser(updatedAccounts[accountIndex])
+      saveUserAccounts(updatedAccounts)
+      saveCurrentUser(user)
+      setCurrentUser(user)
+      setAuthError('')
+      return user
+    } catch (error) {
+      console.error('Failed to reset password:', error)
+      setAuthError('Unable to reset password on this browser. Please try again.')
+      return null
+    }
+  }
+
   const logout = () => {
     saveCurrentUser(null)
     setCurrentUser(null)
@@ -93,6 +123,7 @@ export const useAuth = () => {
     clearAuthError: () => setAuthError(''),
     login,
     logout,
+    resetPassword,
     signUp,
   }
 }
