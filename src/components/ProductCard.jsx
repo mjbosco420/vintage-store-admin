@@ -6,7 +6,7 @@ export default function ProductCard({ product, onAddToCart, onSelect, onLike }) 
   return (
     <div
       onClick={() => onSelect(product.id)}
-      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[30px] border border-white/10 bg-white/5 shadow-[0_20px_80px_-50px_rgba(255,255,255,0.25)] transition duration-500 hover:-translate-y-1 hover:border-white/20"
+      className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[30px] border border-white/10 bg-white/5 shadow-[0_20px_80px_-50px_rgba(255,255,255,0.25)] transition duration-500 hover:-translate-y-1 hover:shadow-2xl hover:border-white/20"
     >
       <div className="relative overflow-hidden">
         {product.isNewDrop && !isReserved && (
@@ -38,8 +38,23 @@ export default function ProductCard({ product, onAddToCart, onSelect, onLike }) 
         <img
           src={product.image}
           alt={product.name}
+          loading="lazy"
           className="h-[350px] w-full object-cover transition duration-700 group-hover:scale-105"
         />
+        {/* Quick add overlay on hover */}
+        <div className="absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAddToCart(product)
+            }}
+            className="rounded-full bg-white p-4 text-black shadow-2xl hover:scale-105"
+            aria-label={`Add ${product.name} to cart`}
+          >
+            Add
+          </button>
+        </div>
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-6 py-4">
           <p className="text-xs uppercase tracking-[0.3em] text-white/70">{product.category}</p>
         </div>
