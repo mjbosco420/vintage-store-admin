@@ -186,6 +186,11 @@ export default function StreetwearStore() {
     setIsAuthOpen(false)
   }
 
+  const handleCartOpen = () => {
+    setIsMyOrderOpen(false)
+    openCart()
+  }
+
   const handleOrderSubmitted = (summary) => {
     setOrderSummaries((current) => {
       const updated = [summary, ...current.filter((item) => item.id !== summary.id)]
@@ -193,6 +198,11 @@ export default function StreetwearStore() {
       return updated
     })
     setIsMyOrderOpen(true)
+  }
+
+  const handleWishlistAddToCart = (product) => {
+    addToCart(product)
+    setIsMyOrderOpen(false)
   }
 
   const handleWebCheckoutSubmit = async (orderPayload) => {
@@ -219,7 +229,7 @@ export default function StreetwearStore() {
       <Navbar
         cartCount={cartCount}
         currentUser={currentUser}
-        onCartClick={openCart}
+        onCartClick={handleCartOpen}
         onLogoClick={handleLogoClick}
         onShopClick={handleShopClick}
         onLoginClick={() => setIsAuthOpen(true)}
@@ -299,7 +309,7 @@ export default function StreetwearStore() {
         orderSummaries={orderSummaries}
         user={currentUser}
         wishlistProducts={wishlistProducts}
-        onAddToCart={addToCart}
+        onAddToCart={handleWishlistAddToCart}
         onClose={() => setIsMyOrderOpen(false)}
       />
     </div>

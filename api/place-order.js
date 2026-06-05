@@ -120,8 +120,16 @@ export default async function handler(req, res) {
           timeZoneName: 'short',
         }).format(orderDate)
 
+        const usdFormatter = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+        })
+        const USD_EXCHANGE_RATE = 16000
+
+        const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
+
         const itemsHtml = emailItems
-          .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - $${(item.price * item.quantity).toLocaleString()}</li>`)
+          .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - ${formatUsd(item.price * item.quantity)}</li>`)
           .join('')
 
         await transporter.verify()
@@ -134,7 +142,7 @@ export default async function handler(req, res) {
             <p>Your order <strong>${id}</strong> has been successfully placed. Here are the details of your purchase:</p>
             <h3>Order Summary:</h3>
             <ul>${itemsHtml}</ul>
-            <p><strong>Total Paid:</strong> $${calculatedTotal.toLocaleString()}</p>
+            <p><strong>Total Paid:</strong> ${formatUsd(calculatedTotal)}</p>
             <p><strong>Date of Purchase:</strong> ${formattedDate}</p>
             <br/>
             <p>Have a good day!</p>
