@@ -1,16 +1,10 @@
 import { useState, useEffect } from 'react'
 import { getUserOrders } from '../services/orders'
+import TrackTab from './MyOrderModal/TrackTab'
+import WishlistTab from './MyOrderModal/WishlistTab'
+import SummaryTab from './MyOrderModal/SummaryTab'
 
 const tabs = ['Track', 'Wishlist', 'Summary']
-
-const formatOrderDate = (value) => {
-  if (!value) return '-'
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
 
 export default function MyOrderModal({
   isOpen,
@@ -110,159 +104,24 @@ export default function MyOrderModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {activeTab === 'Track' && (
-            <form onSubmit={handleTrack} className="mx-auto max-w-xl space-y-4">
-              <div>
-                <label className="mb-2 block text-sm text-white/60">Tracking Number</label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(event) => setTrackingNumber(event.target.value)}
-                  placeholder="Example: JX123456789"
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!trackingNumber.trim()}
-                className="w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Track Package
-              </button>
-
-              {trackingStatus && (
-                <div
-                  className={`rounded-2xl border p-4 text-sm ${
-                    trackingStatus.type === 'loading'
-                      ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200'
-                      : 'border-green-500/20 bg-green-500/10 text-green-200'
-                  }`}
-                >
-                  {trackingStatus.message}
-                </div>
-              )}
-            </form>
+            <TrackTab
+              trackingNumber={trackingNumber}
+              onTrackingNumberChange={setTrackingNumber}
+              trackingStatus={trackingStatus}
+              onTrack={handleTrack}
+            />
           )}
 
           {activeTab === 'Wishlist' && (
-            <div>
-              {!user ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-                  Please log in to view your wishlist.
-                </div>
-              ) : wishlistProducts.length === 0 ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-                  Your wishlist is empty.
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-white/70">{wishlistProducts.length} item{wishlistProducts.length === 1 ? '' : 's'} in your wishlist</p>
-                    <button
-                      type="button"
-                      onClick={onClearWishlist}
-                      className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
-                    >
-                      Clear wishlist
-                    </button>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {wishlistProducts.map((product) => (
-                      <div key={product.id} className="flex items-center gap-4 rounded-[20px] border border-white/10 bg-white/5 p-3">
-                        <img src={product.image} alt={product.name} className="h-20 w-20 rounded-2xl object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold">{product.name}</p>
-                          <p className="mt-1 text-sm text-white/60">{product.price}</p>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={product.stock === 0}
-                          onClick={() => onAddToCart(product)}
-                          className="rounded-full bg-white px-4 py-2 text-xs font-bold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30"
-                        >
-                          Cart
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            <WishlistTab
+              user={user}
+              wishlistProducts={wishlistProducts}
+              onAddToCart={onAddToCart}
+              onClearWishlist={onClearWishlist}
+            />
           )}
 
-          {activeTab === 'Summary' && (
-            <div className="space-y-4">
-              {userOrderSummaries.length === 0 ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-                  No order summary yet.
-                </div>
-              ) : (
-                userOrderSummaries.map((summary) => (
-                  <div key={summary.id} className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-                    <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.25em] text-white/40">Order ID</p>
-                        <p className="mt-1 text-lg font-black">{summary.id}</p>
-                      </div>
-                      <div className="text-left sm:text-right">
-                        <p className="text-xs uppercase tracking-[0.25em] text-white/40">Purchased</p>
-                        <p className="mt-1 text-sm text-white/70">{formatOrderDate(summary.purchasedAt)}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                      {summary.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between gap-4 text-sm">
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">{item.name}</p>
-                            <p className="mt-1 text-white/50">{item.price} x{item.quantity}</p>
-                          </div>
-                          <p className="shrink-0 text-white/70">{item.price}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-white/40">Email</p>
-                          <p className="mt-1 break-all text-white/80">{summary.userEmail}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/40">Total</p>
-                          <p className="mt-1 font-bold text-white">{summary.total}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 border-t border-white/10 pt-4">
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.25em] text-white/40">Status</p>
-                            <p className="mt-1 font-bold capitalize text-white/90">
-                              {summary.status}
-                            </p>
-                          </div>
-                          {summary.trackingNumber && (
-                            <>
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.25em] text-white/40">Courier</p>
-                                <p className="mt-1 font-bold text-white/90">{summary.shippingCourier || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.25em] text-white/40">Tracking No</p>
-                                <p className="mt-1 font-bold text-white/90">{summary.trackingNumber}</p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+          {activeTab === 'Summary' && <SummaryTab orderSummaries={userOrderSummaries} />}
         </div>
       </div>
     </div>
