@@ -17,6 +17,7 @@ import { PROJECTION_DURATION } from './constants/shop'
 import { useAuth } from './hooks/useAuth'
 import { useCart } from './hooks/useCart'
 import { useProducts } from './hooks/useProducts'
+import { useUIState } from './hooks/useUIState'
 import { filterProductsByCategory } from './utils/category'
 import { getOrderSummaries, saveOrderSummaries } from './utils/storage'
 
@@ -33,17 +34,7 @@ export default function StreetwearStore() {
   const [showProjection, setShowProjection] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const [visibleProductCount, setVisibleProductCount] = useState(INITIAL_PRODUCT_LIMIT)
-  const [isAuthOpen, setIsAuthOpen] = useState(false)
-  const [isMyOrderOpen, setIsMyOrderOpen] = useState(false)
-  const [isWebCheckoutOpen, setIsWebCheckoutOpen] = useState(false)
-  const [pendingCheckoutAfterAuth, setPendingCheckoutAfterAuth] = useState(false)
-  const [authBanner, setAuthBanner] = useState(null)
   const [orderSummaries, setOrderSummaries] = useState(() => getOrderSummaries())
-  const [webCheckoutDetails, setWebCheckoutDetails] = useState({
-    name: '',
-    address: '',
-    notes: '',
-  })
   const {
     authError,
     clearAuthError,
@@ -54,6 +45,20 @@ export default function StreetwearStore() {
     signUp,
   } = useAuth()
   const { products, isLoading, loadProducts, handleLike, handleViewProduct, clearWishlist } = useProducts(currentUser)
+  const {
+    authBanner,
+    isAuthOpen,
+    isMyOrderOpen,
+    isWebCheckoutOpen,
+    webCheckoutDetails,
+    openAuth,
+    closeAuth,
+    openMyOrder,
+    closeMyOrder,
+    closeWebCheckout,
+    handleAuthSuccess,
+    handleWebCheckout,
+  } = useUIState({ currentUser, clearAuthError })
   const {
     cartItems,
     cartCount,
@@ -177,54 +182,9 @@ export default function StreetwearStore() {
     }, 50)
   }
 
-  const handleWebCheckout = (buyerDetails) => {
-    setWebCheckoutDetails(buyerDetails)
-
-    if (!currentUser) {
-      clearAuthError()
-      setPendingCheckoutAfterAuth(true)
-      setIsAuthOpen(true)
-      return
-    }
-
-    setIsWebCheckoutOpen(true)
-  }
-
-  const handleAuthClose = () => {
-    setIsAuthOpen(false)
-  }
-
-  const handleAuthSuccess = (user, mode) => {
-    setIsAuthOpen(false)
-    const title =
-      mode === 'signup'
-        ? `Welcome aboard, ${user.name}!`
-        : mode === 'reset'
-        ? `Password reset complete, welcome back, ${user.name}!`
-        : `Welcome back, ${user.name}!`
-
-    const subtitle =
-      mode === 'signup'
-        ? 'Your streetwear journey starts here. Let the fresh drops inspire your next fit.'
-        : 'Great to see you again. The latest drops are waiting in your cart.'
-
-    setAuthBanner({ title, subtitle })
-    if (bannerTimeoutRef.current) {
-      clearTimeout(bannerTimeoutRef.current)
-    }
-    bannerTimeoutRef.current = setTimeout(() => {
-      setAuthBanner(null)
-      bannerTimeoutRef.current = null
-    }, 5500)
-
-    if (pendingCheckoutAfterAuth) {
-      setPendingCheckoutAfterAuth(false)
-      setIsWebCheckoutOpen(true)
-    }
-  }
 
   const handleCartOpen = () => {
-    setIsMyOrderOpen(false)
+    closeMyOrder()
     openCart()
   }
 
@@ -234,12 +194,12 @@ export default function StreetwearStore() {
       saveOrderSummaries(updated)
       return updated
     })
-    setIsMyOrderOpen(true)
+    openMyOrder()
   }
 
   const handleWishlistAddToCart = (product) => {
     addToCart(product)
-    setIsMyOrderOpen(false)
+    closeMyOrder()
   }
 
   const handleWebCheckoutSubmit = async (orderPayload) => {
@@ -269,9 +229,9 @@ export default function StreetwearStore() {
         onCartClick={handleCartOpen}
         onLogoClick={handleLogoClick}
         onShopClick={handleShopClick}
-        onLoginClick={() => setIsAuthOpen(true)}
+        onLoginClick={openAuth}
         onLogoutClick={logout}
-        onMyOrderClick={() => setIsMyOrderOpen(true)}
+        onMyOrderClick={openMyOrder}
       />
       {showProjection && <ProjectionBadge />}
       <Hero categoryFilter={categoryFilter} onNewDropClick={() => handleCategoryClick('New Drop')} onShopNowClick={handleShopClick} />
@@ -326,7 +286,7 @@ export default function StreetwearStore() {
       <AuthModal
         error={authError}
         isOpen={isAuthOpen}
-        onClose={handleAuthClose}
+        onClose={closeAuth}
         onLogin={login}
         onResetPassword={resetPassword}
         onSignUp={signUp}
@@ -338,11 +298,11 @@ export default function StreetwearStore() {
         items={cartItems}
         onOrderSubmitted={handleOrderSubmitted}
         user={currentUser}
-        onClose={() => setIsWebCheckoutOpen(false)}
+        onClose={closeWebCheckout}
         onLogout={() => {
           logout()
-          setIsWebCheckoutOpen(false)
-          setIsAuthOpen(true)
+          closeWebCheckout()
+          openAuth()
         }}
         onSubmitOrder={handleWebCheckoutSubmit}
       />
@@ -353,7 +313,7 @@ export default function StreetwearStore() {
         wishlistProducts={wishlistProducts}
         onAddToCart={handleWishlistAddToCart}
         onClearWishlist={clearWishlist}
-        onClose={() => setIsMyOrderOpen(false)}
+        onClose={closeMyOrder}
       />
     </div>
   )
