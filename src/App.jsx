@@ -1,3 +1,4 @@
+import { PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import 'react-medium-image-zoom/dist/styles.css'
 import './App.css'
@@ -222,7 +223,8 @@ export default function StreetwearStore() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#050505] text-white font-sans overflow-x-hidden">
+    <PayPalScriptProvider options={{ "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID || "test", currency: "USD" }}>
+      <div className="min-h-screen w-full bg-[#050505] text-white font-sans overflow-x-hidden">
       <Navbar
         cartCount={cartCount}
         currentUser={currentUser}
@@ -282,6 +284,9 @@ export default function StreetwearStore() {
         onIncrease={increaseQuantity}
         onDecrease={decreaseQuantity}
         onRemove={removeFromCart}
+        currentUser={currentUser}
+        onSubmitOrder={handleWebCheckoutSubmit}
+        onOrderSubmitted={handleOrderSubmitted}
       />
       <AuthModal
         error={authError}
@@ -316,5 +321,6 @@ export default function StreetwearStore() {
         onClose={closeMyOrder}
       />
     </div>
+    </PayPalScriptProvider>
   )
 }

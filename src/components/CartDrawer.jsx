@@ -1,3 +1,4 @@
+import { PayPalButtons } from '@paypal/react-paypal-js'
 import { useMemo, useState } from 'react'
 import { createWhatsAppCheckoutUrl } from '../utils/checkout'
 
@@ -9,12 +10,16 @@ export default function CartDrawer({
   onIncrease,
   onDecrease,
   onRemove,
+  currentUser,
+  onSubmitOrder,
+  onOrderSubmitted,
 }) {
   const [buyerDetails, setBuyerDetails] = useState({
     name: '',
     address: '',
     notes: '',
   })
+  const [showPaypal, setShowPaypal] = useState(false)
 
   const hasItems = items.length > 0
   const checkoutUrl = useMemo(
@@ -28,6 +33,11 @@ export default function CartDrawer({
       [field]: value,
     }))
   }
+
+  const total = items.reduce((sum, item) => {
+    const price = Number(String(item.price).replace(/[^0-9.-]+/g, ''))
+    return sum + (Number.isFinite(price) ? price : 0) * (item.quantity || 1)
+  }, 0)
 
   if (!isOpen) return null
 
@@ -177,18 +187,74 @@ export default function CartDrawer({
           >
             ORDER VIA WHATSAPP
           </a>
-          <button
-            type="button"
-            disabled={!hasItems}
-            onClick={() => alert('Integrasi PayPal belum diaktifkan (Placeholder)')}
-            className={`flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
-              hasItems
-                ? 'bg-[#003087] text-white hover:scale-[1.02] hover:opacity-90'
-                : 'cursor-not-allowed bg-white/10 text-white/30'
-            }`}
-          >
-            PAY WITH PAYPAL
-          </button>
+          {showPaypal ? (
+            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-white/5 p-4 relative z-0">
+              <PayPalButtons
+                style={{ layout: 'vertical', shape: 'pill', color: 'blue', height: 48 }}
+                createOrder={(data, actions) => {
+                  return actions.order.create({
+                    purchase_units: [{
+                      amount: { value: total.toFixed(2) }
+                    }]
+                  });
+                }}
+                onApprove={async (data, actions) => {
+                  try {
+                    const details = await actions.order.capture();
+                    const generatedOrderId = `PP-${Date.now().toString().slice(-6)}`;
+                    const purchasedAt = new Date().toISOString();
+
+                    const orderPayload = {
+                      id: generatedOrderId,
+                      items: items.map(item => ({ id: item.id, quantity: item.quantity || 1 })),
+                      shippingAddress: buyerDetails.address || 'PayPal Checkout',
+                      notes: buyerDetails.notes || 'Paid via PayPal',
+                      orderedAt: purchasedAt,
+                      user: currentUser || { name: details.payer.name.given_name, email: details.payer.email_address }
+                    };
+
+                    await onSubmitOrder?.(orderPayload);
+
+                    onOrderSubmitted?.({
+                      id: generatedOrderId,
+                      items: items.map(item => ({ ...item })),
+                      purchasedAt,
+                      total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total),
+                      userEmail: orderPayload.user.email,
+                      userName: orderPayload.user.name,
+                    });
+
+                    alert(`Payment successful! Thank you, ${details.payer.name.given_name}. Order ID: ${generatedOrderId}`);
+                    setShowPaypal(false);
+                    onClose();
+                  } catch (error) {
+                    console.error('Failed to submit order to backend:', error);
+                    alert('Payment succeeded but order creation failed: ' + error.message);
+                  }
+                }}
+                onError={(err) => {
+                  console.error('PayPal Checkout Error:', err);
+                  alert('Payment failed. Please try again.');
+                }}
+              />
+              <button type="button" onClick={() => setShowPaypal(false)} className="text-xs text-white/50 underline transition hover:text-white">
+                Cancel PayPal Checkout
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={!hasItems}
+              onClick={() => setShowPaypal(true)}
+              className={`flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
+                hasItems
+                  ? 'bg-[#003087] text-white hover:scale-[1.02] hover:opacity-90'
+                  : 'cursor-not-allowed bg-white/10 text-white/30'
+              }`}
+            >
+              PAY WITH PAYPAL
+            </button>
+          )}
         </div>
       </aside>
     </div>
