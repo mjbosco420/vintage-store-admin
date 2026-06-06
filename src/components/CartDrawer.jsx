@@ -169,14 +169,26 @@ export default function CartDrawer({
             href={checkoutUrl}
             target="_blank"
             rel="noreferrer"
-            className={`flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
+            className={`mb-3 flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
               hasItems
                 ? 'bg-white text-black hover:scale-[1.02] hover:opacity-90'
                 : 'pointer-events-none bg-white/10 text-white/30'
             }`}
           >
-            CHECKOUT VIA WHATSAPP
+            ORDER VIA WHATSAPP
           </a>
+          <button
+            type="button"
+            disabled={!hasItems}
+            onClick={() => alert('Integrasi PayPal belum diaktifkan (Placeholder)')}
+            className={`flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
+              hasItems
+                ? 'bg-[#003087] text-white hover:scale-[1.02] hover:opacity-90'
+                : 'cursor-not-allowed bg-white/10 text-white/30'
+            }`}
+          >
+            PAY WITH PAYPAL
+          </button>
         </div>
       </aside>
     </div>
