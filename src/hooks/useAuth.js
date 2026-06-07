@@ -24,59 +24,73 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser())
   const [authError, setAuthError] = useState('')
 
-  const signUp = ({ name, email, password }) => {
+  const signUp = async ({ name, email, password }) => {
     try {
-      const normalizedEmail = email.trim().toLowerCase()
-      const accounts = getUserAccounts()
-      const existingAccount = accounts.find((account) => account.email === normalizedEmail)
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      })
 
-      if (existingAccount) {
-        setAuthError('Email already registered. Please log in.')
+      const data = await response.json()
+
+      if (!response.ok) {
+        setAuthError(data.message || 'Unable to create account.')
         return null
       }
 
-      const account = {
-        id: createUserId(),
+      const user = {
+        id: data.customerId,
         name: name.trim(),
-        email: normalizedEmail,
-        password,
+        email: email.trim().toLowerCase(),
       }
-      const user = createPublicUser(account)
 
-      saveUserAccounts([...accounts, account])
       saveCurrentUser(user)
       setCurrentUser(user)
       setAuthError('')
+
       return user
     } catch (error) {
       console.error('Failed to create account:', error)
-      setAuthError('Unable to create account on this browser. Please try again.')
+      setAuthError('Unable to create account. Please try again.')
       return null
     }
   }
 
-  const login = ({ email, password }) => {
+  const login = async ({ email, password }) => {
     try {
-      const normalizedEmail = email.trim().toLowerCase()
-      const accounts = getUserAccounts()
-      const account = accounts.find(
-        (item) => item.email === normalizedEmail && item.password === password,
-      )
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
 
-      if (!account) {
-        setAuthError('Email or password is incorrect.')
+      const data = await response.json()
+
+      if (!response.ok) {
+        setAuthError(data.message || 'Email or password is incorrect.')
         return null
       }
 
-      const user = createPublicUser(account)
-
-      saveCurrentUser(user)
-      setCurrentUser(user)
+      saveCurrentUser(data.user)
+      setCurrentUser(data.user)
       setAuthError('')
-      return user
+
+      return data.user
     } catch (error) {
       console.error('Failed to log in:', error)
-      setAuthError('Unable to log in on this browser. Please try again.')
+      setAuthError('Unable to log in. Please try again.')
       return null
     }
   }

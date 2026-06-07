@@ -8,12 +8,15 @@ export default function WebCheckoutModal({
   user,
   onClose,
   onLogout,
+  onLoginClick, // New prop to open AuthModal
   onSubmitOrder,
 }) {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [orderId, setOrderId] = useState('')
+
+  const isLoggedIn = !!user
 
   if (!isOpen) return null
 
@@ -28,6 +31,11 @@ export default function WebCheckoutModal({
   }).format(total)
 
   const handleSubmit = async (event) => {
+    if (!isLoggedIn) {
+      setSubmitError('Please log in or create an account before completing your purchase.');
+      return;
+    }
+
     event.preventDefault()
     const generatedOrderId = `VS-${Date.now().toString().slice(-6)}`
     const purchasedAt = new Date().toISOString()
@@ -44,6 +52,10 @@ export default function WebCheckoutModal({
       total: formattedTotal,
       userEmail: user?.email || '',
       userName: user?.name || '',
+      paymentMethod: 'Website',
+      shippingAddress: buyerDetails.address || '-',
+      notes: buyerDetails.notes || '-',
+      status: 'processing',
     }
 
     setIsSubmitting(true)
@@ -62,6 +74,7 @@ export default function WebCheckoutModal({
         })),
         shippingAddress: safeAddress,
         notes: safeNotes,
+        paymentMethod: 'Website',
         orderedAt: purchasedAt,
         user,
       })
@@ -128,10 +141,29 @@ export default function WebCheckoutModal({
                 </div>
               </div>
 
+              {!isLoggedIn && (
+                <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-center">
+                  <p className="text-sm text-white/60">
+                    Please log in or create an account before completing your purchase.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose(); // Close WebCheckoutModal
+                      onLoginClick(); // Open AuthModal
+                    }}
+                    className="mt-4 w-full rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]"
+                  >
+                    LOGIN / SIGN UP
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-3">
                 {items.map((item) => (
                   <div key={item.id} className="flex items-center gap-4 rounded-[20px] border border-white/10 bg-white/5 p-3">
                     <img src={item.image} alt={item.name} className="h-16 w-16 rounded-2xl object-cover" />
+                    {/* ... other item details */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold">{item.name}</p>
                       <p className="mt-1 text-sm text-white/60">{item.price} x{item.quantity}</p>
@@ -168,7 +200,7 @@ export default function WebCheckoutModal({
           ) : (
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isLoggedIn} // Disable if not logged in
               className="w-full rounded-full bg-white px-6 py-4 text-sm font-bold text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? 'SUBMITTING...' : 'PLACE ORDER'}

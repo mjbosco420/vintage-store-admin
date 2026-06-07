@@ -12,18 +12,18 @@ const sanityDataset = (process.env.VITE_SANITY_DATASET || process.env.SANITY_DAT
 const emailUser = (process.env.EMAIL_USER || '').trim()
 const emailPass = (process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD || '').replace(/\s+/g, '')
 
-// NOTE: don't throw at module import time — return JSON errors from handler instead.
-// We'll create the Sanity client and SMTP transporter inside the handler after validating envs.
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
   try {
-    const { id, items, shippingAddress, notes, orderedAt, user } = req.body
+    const { id, items, shippingAddress, notes, orderedAt, user, paymentMethod } = req.body
 
-    // Runtime validation for required server env vars (avoid crashing at import)
+    if (!user || !user.id) {
+      return res.status(401).json({ message: 'Authentication required to place an order.' })
+    }
+
     if (!sanityToken) {
       return res.status(500).json({ message: 'SANITY_SECRET_API_TOKEN or VITE_SANITY_WRITE_TOKEN must be configured for server-side order processing.' })
     }
@@ -31,7 +31,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ message: 'EMAIL_USER and EMAIL_APP_PASSWORD (or EMAIL_PASSWORD) must be configured on the server.' })
     }
 
-    // Create Sanity server client now that token exists
     const serverClient = createClient({
       projectId: sanityProjectId,
       dataset: sanityDataset,
@@ -40,7 +39,6 @@ export default async function handler(req, res) {
       token: sanityToken,
     })
 
-    // Configure SMTP transporter lazily
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
@@ -51,7 +49,6 @@ export default async function handler(req, res) {
       },
     })
 
-    // --- 1. VALIDASI BACKEND (Bypass Protection) ---
     if (!items || items.length === 0) {
       return res.status(400).json({ message: 'Cart is empty' })
     }
@@ -59,16 +56,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Input exceeds maximum length limit' })
     }
 
-    // --- 2. PENGECEKAN HARGA ASLI (Price Tampering Protection) ---
     let calculatedTotal = 0
     const orderItems = []
-    const emailItems = [] // Untuk dirangkum di dalam email
+    const emailItems = []
 
     console.log("ORDER BODY:", JSON.stringify(req.body, null, 2))
-    
-    // Mengambil kurs USD ke IDR secara otomatis dari API publik
-    // Jika gagal (timeout/error), sistem otomatis memakai kurs manual 18.129
-    let USD_EXCHANGE_RATE = 18129 
+
+    let USD_EXCHANGE_RATE = 18129
     try {
       const rateResponse = await fetch('https://open.er-api.com/v6/latest/USD')
       const rateData = await rateResponse.json()
@@ -76,64 +70,55 @@ export default async function handler(req, res) {
         USD_EXCHANGE_RATE = rateData.rates.IDR
       }
     } catch (rateError) {
-      console.error('Gagal mengambil kurs dinamis, menggunakan kurs fallback:', rateError)
+      console.error('Failed to fetch dynamic exchange rate, using fallback:', rateError)
     }
-    console.log(`Menggunakan Kurs USD saat ini: ${USD_EXCHANGE_RATE}`)
+    console.log(`Using USD exchange rate: ${USD_EXCHANGE_RATE}`)
 
     for (const item of items) {
       console.log("ITEM ID:", item.id)
       console.log("ITEM:", JSON.stringify(item, null, 2))
 
-      // Ambil harga asli langsung dari Sanity Database berdasarkan ID
       const realProduct = await serverClient.getDocument(item.id)
-      
+
       if (!realProduct) {
         return res.status(404).json({ message: `Product ${item.id} not found` })
       }
 
-      // Hitung total menggunakan harga asli dari database
       const price = Number(realProduct.price) || 0
       calculatedTotal += price * item.quantity
 
-      // Susun referensi produk untuk disimpan di order Sanity
       orderItems.push({
         _key: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         productId: item.id,
-        productName:
-          realProduct.name ||
-          realProduct.title ||
-          'Unknown Product',
+        productName: realProduct.name || realProduct.title || 'Unknown Product',
         price: String(price / USD_EXCHANGE_RATE),
         quantity: item.quantity,
       })
 
-      // Simpan data produk yang asli untuk laporan email
       emailItems.push({
         name: realProduct.name || realProduct.title || `Item ${item.id}`,
         quantity: item.quantity,
-        price: price
+        price: price,
       })
     }
 
-    // --- 3. BUAT PESANAN DI SANITY (Secure Token Usage) ---
     console.log("BEFORE CREATE ORDER")
     const newOrder = await serverClient.create({
       _type: 'order',
       orderNumber: id,
       customerName: user?.name || 'Guest',
       customerEmail: user?.email || '',
-      shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''), // XSS sanitize
-      notes: (notes || '-').replace(/[<>]/g, ''), // XSS sanitize
+      shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''),
+      notes: (notes || '-').replace(/[<>]/g, ''),
       orderTotal: String(calculatedTotal / USD_EXCHANGE_RATE),
       orderedAt: orderedAt,
       status: 'new',
-      source: 'website',
+      paymentMethod: paymentMethod || 'Website',
       items: orderItems,
     })
     console.log("AFTER CREATE ORDER")
     console.log("NEW ORDER:", JSON.stringify(newOrder, null, 2))
 
-    // --- 4. KIRIM EMAIL KONFIRMASI PEMBELIAN ---
     if (user?.email) {
       try {
         const orderDate = new Date(orderedAt || Date.now())
@@ -165,22 +150,27 @@ export default async function handler(req, res) {
           subject: `Order Confirmation - ${id}`,
           html: `
             <h2>Thank you for shopping with us, ${user.name || 'Guest'}!</h2>
-            <p>Your order <strong>${id}</strong> has been successfully placed. Here are the details of your purchase:</p>
+            <p>Your order <strong>${id}</strong> has been successfully placed. Here are your purchase details:</p>
+            <p><strong>Payment Method:</strong> ${paymentMethod || 'Website'}</p>
+            <p><strong>Shipping Address:</strong> ${shippingAddress || '-'}</p>
+            ${notes ? `<p><strong>Customer Notes:</strong> ${notes}</p>` : ''}
+
             <h3>Order Summary:</h3>
-            <ul>${itemsHtml}</ul>
+            <ul>
+              ${itemsHtml}
+            </ul>
             <p><strong>Total Paid:</strong> ${formatUsd(calculatedTotal)}</p>
-            <p><strong>Date of Purchase:</strong> ${formattedDate}</p>
+            <p><strong>Purchase Date:</strong> ${formattedDate}</p>
             <br/>
-            <p>Have a good day!</p>
+            <p>Have a great day!</p>
           `,
         })
       } catch (emailError) {
         console.error('Failed to send order email:', emailError)
-        return res.status(500).json({ message: 'Pesanan berhasil dibuat, tetapi email konfirmasi gagal dikirim. ' + (emailError.message || 'Periksa konfigurasi EMAIL_USER / EMAIL_APP_PASSWORD.') })
+        return res.status(500).json({ message: 'Order created successfully, but confirmation email failed to send. ' + (emailError.message || 'Please check EMAIL_USER / EMAIL_APP_PASSWORD configuration.') })
       }
     }
 
-    // Kirim respons sukses kembali ke Frontend
     return res.status(200).json({ success: true, order: newOrder })
 
   } catch (error) {
@@ -188,22 +178,20 @@ export default async function handler(req, res) {
     console.error("RESPONSE BODY:", error.responseBody)
     console.error("DETAILS:", error.details)
 
-    // Cek spesifik untuk error "project user not found"
     if (error.statusCode === 401 && error.message.includes('project user not found')) {
       return res.status(500).json({
-        message: `Authentication Error: Token Sanity yang sedang dipakai Vercel saat ini (berawalan ${sanityToken.substring(0, 6)}...) tidak memiliki akses ke project j7s2sxwm. Anda salah memasukkan token dari project lain.`,
+        message: `Authentication Error: The Sanity token currently used (starting with ${sanityToken.substring(0, 6)}...) does not have access to project j7s2sxwm. You may have entered a token from a different project.`,
       })
     }
 
-    // Cek spesifik untuk error "insufficient permissions"
     if (error.statusCode === 403 || (error.message && error.message.includes('Insufficient permissions'))) {
       return res.status(500).json({
-        message: `Izin Ditolak: token server dari ${sanityTokenSource} tidak punya izin create di dataset ${sanityDataset}. Pastikan Anda menggunakan Sanity server token dengan permission write/create untuk project ${sanityProjectId}, bukan token viewer publik.`,
+        message: `Permission Denied: The server token from ${sanityTokenSource} does not have create permission on dataset ${sanityDataset}. Make sure you are using a Sanity server token with write/create permission for project ${sanityProjectId}, not a public viewer token.`,
       })
     }
 
-    return res.status(500).json({ 
-      message: error.message || 'Gagal memproses pesanan di server.' 
+    return res.status(500).json({
+      message: error.message || 'Failed to process order on server.',
     })
   }
 }

@@ -204,6 +204,11 @@ export default function StreetwearStore() {
   }
 
   const handleWebCheckoutSubmit = async (orderPayload) => {
+    if (!currentUser) {
+      // This should ideally be caught earlier in the UI, but as a fallback
+      throw new Error('Authentication required to place an order.');
+    }
+
     try {
       // Tembak data ke jalur API Serverless (Vercel) yang aman
       const response = await fetch('/api/place-order', {
@@ -239,7 +244,7 @@ export default function StreetwearStore() {
       <Hero categoryFilter={categoryFilter} onNewDropClick={() => handleCategoryClick('New Drop')} onShopNowClick={handleShopClick} />
       {authBanner && (
         <div className="fixed left-1/2 top-[5.5rem] z-[150] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-[28px] border border-white/10 bg-white/95 p-5 shadow-2xl text-slate-950 backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Welcome message</p>
+          <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Hello....</p>
           <h3 className="mt-2 text-xl font-black">{authBanner.title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">{authBanner.subtitle}</p>
         </div>
@@ -287,6 +292,7 @@ export default function StreetwearStore() {
         currentUser={currentUser}
         onSubmitOrder={handleWebCheckoutSubmit}
         onOrderSubmitted={handleOrderSubmitted}
+        onLoginClick={openAuth} // Pass openAuth to CartDrawer
       />
       <AuthModal
         error={authError}
@@ -305,11 +311,13 @@ export default function StreetwearStore() {
         user={currentUser}
         onClose={closeWebCheckout}
         onLogout={() => {
+          // This logout is from WebCheckoutModal, so it should also close the modal
           logout()
           closeWebCheckout()
           openAuth()
         }}
         onSubmitOrder={handleWebCheckoutSubmit}
+        onLoginClick={openAuth} // Pass openAuth to WebCheckoutModal for its internal login button
       />
       <MyOrderModal
         isOpen={isMyOrderOpen}

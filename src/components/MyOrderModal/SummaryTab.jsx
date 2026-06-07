@@ -55,6 +55,30 @@ export default function SummaryTab({ orderSummaries }) {
               </div>
             </div>
 
+            <div className="mt-4 border-t border-white/10 pt-4 space-y-3">
+
+              <div>
+                <p className="text-white/40">Payment Method</p>
+                <p className="mt-1 text-white/90">
+                  {summary.paymentMethod || '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-white/40">Shipping Address</p>
+                <p className="mt-1 text-white/90 whitespace-pre-wrap">
+                  {summary.shippingAddress || '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-white/40">Customer Notes</p>
+                <p className="mt-1 text-white/90">
+                  {summary.notes || '-'}
+                </p>
+              </div>
+            </div>
+
             <div className="mt-2 border-t border-white/10 pt-4">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div>
