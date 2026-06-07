@@ -200,16 +200,23 @@ export default function CartDrawer({
                 onApprove={async (data, actions) => {
                   try {
                     const details = await actions.order.capture();
-                    const generatedOrderId = `PP-${Date.now().toString().slice(-6)}`;
+                    const generatedOrderId = `VS-${Date.now().toString().slice(-6)}`;
                     const purchasedAt = new Date().toISOString();
+
+                    const paypalName = [details?.payer?.name?.given_name, details?.payer?.name?.surname].filter(Boolean).join(' ');
+                    const rawName = buyerDetails.name || paypalName || 'Guest';
+                    const cleanName = rawName.replace(/[^a-zA-Z0-9\s.-]/g, '').trim() || 'Guest';
+                    
+                    const safeAddress = (buyerDetails.address || '-').replace(/[<>]/g, '').substring(0, 500);
+                    const safeNotes = (buyerDetails.notes ? buyerDetails.notes + ' (PayPal)' : 'PayPal').replace(/[<>]/g, '').substring(0, 500);
 
                     const orderPayload = {
                       id: generatedOrderId,
                       items: items.map(item => ({ id: item.id, quantity: item.quantity || 1 })),
-                      shippingAddress: buyerDetails.address || 'PayPal Checkout',
-                      notes: buyerDetails.notes || 'Paid via PayPal',
+                      shippingAddress: safeAddress,
+                      notes: safeNotes,
                       orderedAt: purchasedAt,
-                      user: currentUser || { name: details.payer.name.given_name, email: details.payer.email_address }
+                      user: currentUser || { name: cleanName, email: (details?.payer?.email_address || 'guest@paypal.com').toLowerCase() }
                     };
 
                     await onSubmitOrder?.(orderPayload);
@@ -223,11 +230,15 @@ export default function CartDrawer({
                       userName: orderPayload.user.name,
                     });
 
-                    alert(`Payment successful! Thank you, ${details.payer.name.given_name}. Order ID: ${generatedOrderId}`);
+                    setTimeout(() => {
+                      alert(`Payment successful! Thank you, ${cleanName}. Order ID: ${generatedOrderId}`);
+                    }, 300);
                     onClose();
                   } catch (error) {
                     console.error('Failed to submit order to backend:', error);
-                    alert('Payment succeeded but order creation failed: ' + error.message);
+                    setTimeout(() => {
+                      alert('Payment succeeded but order creation failed: ' + error.message);
+                    }, 300);
                   }
                 }}
                 onError={(err) => {

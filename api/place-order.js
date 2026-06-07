@@ -64,7 +64,26 @@ export default async function handler(req, res) {
     const orderItems = []
     const emailItems = [] // Untuk dirangkum di dalam email
 
+    console.log("ORDER BODY:", JSON.stringify(req.body, null, 2))
+    
+    // Mengambil kurs USD ke IDR secara otomatis dari API publik
+    // Jika gagal (timeout/error), sistem otomatis memakai kurs manual 18.129
+    let USD_EXCHANGE_RATE = 18129 
+    try {
+      const rateResponse = await fetch('https://open.er-api.com/v6/latest/USD')
+      const rateData = await rateResponse.json()
+      if (rateData?.rates?.IDR) {
+        USD_EXCHANGE_RATE = rateData.rates.IDR
+      }
+    } catch (rateError) {
+      console.error('Gagal mengambil kurs dinamis, menggunakan kurs fallback:', rateError)
+    }
+    console.log(`Menggunakan Kurs USD saat ini: ${USD_EXCHANGE_RATE}`)
+
     for (const item of items) {
+      console.log("ITEM ID:", item.id)
+      console.log("ITEM:", JSON.stringify(item, null, 2))
+
       // Ambil harga asli langsung dari Sanity Database berdasarkan ID
       const realProduct = await serverClient.getDocument(item.id)
       
@@ -79,9 +98,13 @@ export default async function handler(req, res) {
       // Susun referensi produk untuk disimpan di order Sanity
       orderItems.push({
         _key: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        product: { _type: 'reference', _ref: item.id },
+        productId: item.id,
+        productName:
+          realProduct.name ||
+          realProduct.title ||
+          'Unknown Product',
+        price: String(price / USD_EXCHANGE_RATE),
         quantity: item.quantity,
-        priceAtPurchase: price // Catat harga saat transaksi terjadi
       })
 
       // Simpan data produk yang asli untuk laporan email
@@ -93,18 +116,22 @@ export default async function handler(req, res) {
     }
 
     // --- 3. BUAT PESANAN DI SANITY (Secure Token Usage) ---
+    console.log("BEFORE CREATE ORDER")
     const newOrder = await serverClient.create({
       _type: 'order',
-      orderId: id,
+      orderNumber: id,
       customerName: user?.name || 'Guest',
       customerEmail: user?.email || '',
       shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''), // XSS sanitize
       notes: (notes || '-').replace(/[<>]/g, ''), // XSS sanitize
-      totalAmount: calculatedTotal,
+      orderTotal: String(calculatedTotal / USD_EXCHANGE_RATE),
+      orderedAt: orderedAt,
+      status: 'new',
+      source: 'website',
       items: orderItems,
-      status: 'pending',
-      orderDate: orderedAt,
     })
+    console.log("AFTER CREATE ORDER")
+    console.log("NEW ORDER:", JSON.stringify(newOrder, null, 2))
 
     // --- 4. KIRIM EMAIL KONFIRMASI PEMBELIAN ---
     if (user?.email) {
@@ -124,7 +151,6 @@ export default async function handler(req, res) {
           style: 'currency',
           currency: 'USD',
         })
-        const USD_EXCHANGE_RATE = 16000
 
         const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
 
@@ -159,6 +185,8 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Order processing failed:', error)
+    console.error("RESPONSE BODY:", error.responseBody)
+    console.error("DETAILS:", error.details)
 
     // Cek spesifik untuk error "project user not found"
     if (error.statusCode === 401 && error.message.includes('project user not found')) {
