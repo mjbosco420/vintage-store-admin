@@ -19,7 +19,6 @@ export default function CartDrawer({
     address: '',
     notes: '',
   })
-  const [showPaypal, setShowPaypal] = useState(false)
 
   const hasItems = items.length > 0
   const checkoutUrl = useMemo(
@@ -162,7 +161,7 @@ export default function CartDrawer({
           )}
         </div>
 
-        <div className="border-t border-white/10 p-6">
+        <div className="shrink-0 overflow-y-auto border-t border-white/10 p-6 max-h-[55vh]">
           <button
             type="button"
             onClick={() => onWebCheckout(buyerDetails)}
@@ -187,8 +186,8 @@ export default function CartDrawer({
           >
             ORDER VIA WHATSAPP
           </a>
-          {showPaypal ? (
-            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-white/5 p-4 relative z-0">
+          {hasItems ? (
+            <div className="flex flex-col gap-3 rounded-2xl bg-white/5 p-2 relative z-0">
               <PayPalButtons
                 style={{ layout: 'vertical', shape: 'pill', color: 'blue', height: 48 }}
                 createOrder={(data, actions) => {
@@ -225,7 +224,6 @@ export default function CartDrawer({
                     });
 
                     alert(`Payment successful! Thank you, ${details.payer.name.given_name}. Order ID: ${generatedOrderId}`);
-                    setShowPaypal(false);
                     onClose();
                   } catch (error) {
                     console.error('Failed to submit order to backend:', error);
@@ -237,20 +235,12 @@ export default function CartDrawer({
                   alert('Payment failed. Please try again.');
                 }}
               />
-              <button type="button" onClick={() => setShowPaypal(false)} className="text-xs text-white/50 underline transition hover:text-white">
-                Cancel PayPal Checkout
-              </button>
             </div>
           ) : (
             <button
               type="button"
-              disabled={!hasItems}
-              onClick={() => setShowPaypal(true)}
-              className={`flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition ${
-                hasItems
-                  ? 'bg-[#003087] text-white hover:scale-[1.02] hover:opacity-90'
-                  : 'cursor-not-allowed bg-white/10 text-white/30'
-              }`}
+              disabled
+              className="flex w-full items-center justify-center rounded-full px-6 py-4 text-sm font-bold transition cursor-not-allowed bg-white/10 text-white/30"
             >
               PAY WITH PAYPAL
             </button>
