@@ -44,6 +44,20 @@ export default {
     },
 
     {
+      name: 'paymentMethod',
+      title: 'Payment Method',
+      type: 'string',
+      initialValue: 'Website',
+      options: {
+        list: [
+          {title: 'Website', value: 'Website'},
+          {title: 'PayPal', value: 'PayPal'},
+          {title: 'WhatsApp', value: 'WhatsApp'},
+        ],
+      },
+    },
+
+    {
       name: 'customerName',
       title: 'Customer Name',
       type: 'string',
@@ -84,11 +98,9 @@ export default {
       validation: (Rule: any) =>
         Rule.custom((value: string, context: any) => {
           const status = context.document?.status
-
           if (status === 'shipped' && !value) {
             return 'Courier is required when order status is Shipped'
           }
-
           return true
         }),
     },
@@ -101,11 +113,9 @@ export default {
       validation: (Rule: any) =>
         Rule.custom((value: string, context: any) => {
           const status = context.document?.status
-
           if (status === 'shipped' && !value) {
             return 'Tracking number is required when order status is Shipped'
           }
-
           return true
         }),
     },
@@ -265,7 +275,6 @@ export default {
     },
     prepare(selection: any) {
       const trackingLabel = selection.trackingNumber ? ` - ${selection.trackingNumber}` : ''
-
       return {
         title: selection.title,
         subtitle: `${selection.customerName || 'Customer'} - ${selection.status || 'new'}${trackingLabel}`,
