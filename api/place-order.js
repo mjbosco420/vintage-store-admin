@@ -106,6 +106,7 @@ export default async function handler(req, res) {
     const newOrder = await serverClient.create({
       _type: 'order',
       orderNumber: id,
+      customerId: user.id, // Tambahkan baris ini untuk menautkan pesanan ke pengguna
       customerName: user?.name || 'Guest',
       customerEmail: user?.email || '',
       shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''),

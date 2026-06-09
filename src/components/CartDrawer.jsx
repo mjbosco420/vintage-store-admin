@@ -234,20 +234,14 @@ export default function CartDrawer({
                         paypalTransactionId: details.id,
                       }
 
-                      await onSubmitOrder?.(orderPayload)
+                      const serverOrder = await onSubmitOrder?.(orderPayload)
 
-                      onOrderSubmitted?.({
-                        id: generatedOrderId,
-                        items: items.map((item) => ({ ...item })),
-                        purchasedAt,
-                        total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total),
-                        userEmail: currentUser.email,
-                        userName: currentUser.name,
-                        paymentMethod: orderPayload.paymentMethod,
-                        shippingAddress: orderPayload.shippingAddress,
-                        notes: orderPayload.notes,
-                        status: 'processing',
-                      })
+                      // Objek serverOrder dari place-order.js mungkin memiliki struktur yang berbeda
+                      // dari ringkasan sisi klien. Kita akan mengandalkan App.jsx untuk memformatnya.
+                      // Jika serverOrder null/undefined, kita harus menanganinya.
+                      if (serverOrder) {
+                        onOrderSubmitted?.(serverOrder)
+                      }
 
                       setTimeout(() => {
                         alert(`Payment successful! Thank you, ${currentUser.name}. Order ID: ${generatedOrderId}`)

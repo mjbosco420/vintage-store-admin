@@ -13,15 +13,13 @@ import Navbar from './components/Navbar'
 import ProductSection from './components/ProductSection'
 import ProjectionBadge from './components/ProjectionBadge'
 import PromoBanner from './components/PromoBanner'
-import WebCheckoutModal from './components/WebCheckoutModal'
 import { PROJECTION_DURATION } from './constants/shop'
 import { useAuth } from './hooks/useAuth'
 import { useCart } from './hooks/useCart'
 import { useProducts } from './hooks/useProducts'
 import { useUIState } from './hooks/useUIState'
 import { filterProductsByCategory } from './utils/category'
-import { getOrderSummaries, saveOrderSummaries } from './utils/storage'
-
+import WebCheckoutModal from './components/WebCheckoutModal'
 const INITIAL_PRODUCT_LIMIT = 8
 
 export default function StreetwearStore() {
@@ -34,8 +32,8 @@ export default function StreetwearStore() {
   const [zoomedImage, setZoomedImage] = useState(null)
   const [showProjection, setShowProjection] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
-  const [visibleProductCount, setVisibleProductCount] = useState(INITIAL_PRODUCT_LIMIT)
-  const [orderSummaries, setOrderSummaries] = useState(() => getOrderSummaries())
+  const [visibleProductCount, setVisibleProductCount] = useState(INITIAL_PRODUCT_LIMIT) // Tetap pertahankan ini untuk bagian produk
+  const [orderSummaries, setOrderSummaries] = useState([]) // Inisialisasi sebagai array kosong, akan diambil dari server
   const {
     authError,
     clearAuthError,
@@ -189,12 +187,38 @@ export default function StreetwearStore() {
     openCart()
   }
 
-  const handleOrderSubmitted = (summary) => {
-    setOrderSummaries((current) => {
-      const updated = [summary, ...current.filter((item) => item.id !== summary.id)]
-      saveOrderSummaries(updated)
-      return updated
-    })
+  // Fungsi untuk mengambil pesanan dari server
+  const fetchOrders = async () => {
+    if (!currentUser?.id) {
+      setOrderSummaries([]); // Hapus pesanan jika tidak ada pengguna
+      return;
+    }
+    try {
+      const response = await fetch(`/api/get-orders?email=${currentUser.email}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch orders.');
+      }
+      setOrderSummaries(data.orders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      // Opsional: tampilkan pesan error yang lebih ramah pengguna
+    }
+  };
+
+  // Ambil pesanan saat pengguna login atau MyOrderModal dibuka
+  useEffect(() => {
+    if (currentUser?.id && isMyOrderOpen) {
+      fetchOrders();
+    } else if (!currentUser?.id) {
+      setOrderSummaries([]); // Hapus pesanan jika pengguna logout
+    }
+  }, [currentUser?.id, isMyOrderOpen]);
+
+  const handleOrderSubmitted = (serverOrder) => {
+    // Setelah pesanan dikirim, ambil kembali semua pesanan untuk memastikan daftar terbaru
+    // dan menyertakan pesanan baru dari server.
+    fetchOrders();
     openMyOrder()
   }
 
@@ -221,6 +245,7 @@ export default function StreetwearStore() {
       if (!response.ok) {
         throw new Error(data.message || 'Gagal memproses pesanan')
       }
+      return data.order // Mengembalikan objek pesanan yang dibuat dari server
     } catch (error) {
       console.error('Error Checkout:', error)
       throw error // Lemparkan error agar WebCheckoutModal bisa menampilkan pesan gagal
@@ -313,6 +338,7 @@ export default function StreetwearStore() {
         onLogout={() => {
           // This logout is from WebCheckoutModal, so it should also close the modal
           logout()
+          setOrderSummaries([]); // Hapus pesanan saat logout
           closeWebCheckout()
           openAuth()
         }}

@@ -21,13 +21,16 @@ export default function MyOrderModal({
   const [liveOrders, setLiveOrders] = useState([])
 
   useEffect(() => {
-    if (isOpen && activeTab === 'Summary' && user?.email) {
-      getUserOrders(user.email)
-        .then(setLiveOrders)
-        .catch(console.error)
-    }
-  }, [isOpen, activeTab, user?.email])
-
+  if (isOpen && activeTab === 'Summary' && user?.email) {
+    getUserOrders(user.email)
+  .then((orders) => {
+    console.log('Querying with email:', user.email)
+    console.log('Live orders from Sanity:', orders)
+    setLiveOrders(orders)
+  })
+      .catch(console.error)
+  }
+}, [isOpen, activeTab, user?.email])
   const userOrderSummaries = user?.email
     ? orderSummaries
         .filter((summary) => summary.userEmail === user.email)

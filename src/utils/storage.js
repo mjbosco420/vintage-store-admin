@@ -99,19 +99,3 @@ export const saveCurrentUser = (user) => {
 
   window.localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user))
 }
-
-export const getOrderSummaries = () => {
-  if (typeof window === 'undefined') return []
-
-  try {
-    return JSON.parse(window.localStorage.getItem(ORDER_SUMMARIES_KEY) || '[]')
-  } catch (error) {
-    console.warn('Invalid orderSummaries in localStorage, resetting.', error)
-    return []
-  }
-}
-
-export const saveOrderSummaries = (summaries) => {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(ORDER_SUMMARIES_KEY, JSON.stringify(summaries))
-}

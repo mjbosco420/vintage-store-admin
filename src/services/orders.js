@@ -61,6 +61,8 @@ export const submitWebsiteOrder = async ({ id, items, notes, orderedAt, shipping
 }
 
 export const getUserOrders = async (email) => {
+  console.log('Token exists:', !!sanityWriteToken)
+  console.log('Email:', email)
   if (!email || !sanityWriteToken) return []
   return orderClient.fetch(
     `*[_type == "order" && customerEmail == $email] | order(_createdAt desc) {

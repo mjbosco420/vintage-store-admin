@@ -66,7 +66,7 @@ export default function WebCheckoutModal({
       const safeAddress = (buyerDetails.address || '-').replace(/[<>]/g, '').substring(0, 500)
       const safeNotes = (buyerDetails.notes || '-').replace(/[<>]/g, '').substring(0, 500)
 
-      await onSubmitOrder?.({
+      const serverOrder = await onSubmitOrder?.({
         id: generatedOrderId,
         items: items.map((item) => ({
           id: item.id,
@@ -78,7 +78,7 @@ export default function WebCheckoutModal({
         orderedAt: purchasedAt,
         user,
       })
-      onOrderSubmitted?.(summary)
+      onOrderSubmitted?.(serverOrder) // Meneruskan objek pesanan dari server
       setOrderId(generatedOrderId)
       setIsSubmitted(true)
     } catch (error) {
