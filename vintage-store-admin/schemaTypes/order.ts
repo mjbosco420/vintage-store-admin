@@ -10,7 +10,12 @@ export default {
       type: 'string',
       validation: (Rule: any) => Rule.required(),
     },
-
+    {
+      name: 'customerId',
+      title: 'Customer ID',
+      type: 'string',
+      readOnly: true,
+    },
     {
       name: 'status',
       title: 'Status',
