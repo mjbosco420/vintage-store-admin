@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { getUserOrders } from '../services/orders'
+import { useState } from 'react'
 import TrackTab from './MyOrderModal/TrackTab'
 import WishlistTab from './MyOrderModal/WishlistTab'
 import SummaryTab from './MyOrderModal/SummaryTab'
@@ -18,32 +17,11 @@ export default function MyOrderModal({
   const [activeTab, setActiveTab] = useState('Track')
   const [trackingNumber, setTrackingNumber] = useState('')
   const [trackingStatus, setTrackingStatus] = useState(null)
-  const [liveOrders, setLiveOrders] = useState([])
 
-  useEffect(() => {
-  if (isOpen && activeTab === 'Summary' && user?.email) {
-    getUserOrders(user.email)
-  .then((orders) => {
-    console.log('Querying with email:', user.email)
-    console.log('Live orders from Sanity:', orders)
-    setLiveOrders(orders)
-  })
-      .catch(console.error)
-  }
-}, [isOpen, activeTab, user?.email])
   const userOrderSummaries = user?.email
     ? orderSummaries
         .filter((summary) => summary.userEmail === user.email)
         .sort((a, b) => new Date(b.purchasedAt) - new Date(a.purchasedAt))
-        .map((summary) => {
-          const liveData = liveOrders.find((order) => order.orderNumber === summary.id)
-          return {
-            ...summary,
-            status: liveData?.status || 'new',
-            trackingNumber: liveData?.trackingNumber || null,
-            shippingCourier: liveData?.shippingCourier || null,
-          }
-        })
     : []
 
   if (!isOpen) return null
