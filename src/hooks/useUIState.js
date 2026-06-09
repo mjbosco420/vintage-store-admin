@@ -53,7 +53,7 @@ export const useUIState = ({ currentUser, clearAuthError }) => {
 
     const subtitle =
       mode === 'signup'
-        ? 'Your streetwear journey starts here. Let the fresh drops inspire your next fit.'
+        ? 'Your vintage stuff journey starts here. Let the fresh drops inspire your next fit.'
         : 'Great to see you again. The latest drops are waiting in your cart.'
 
     setAuthBanner({ title, subtitle })
