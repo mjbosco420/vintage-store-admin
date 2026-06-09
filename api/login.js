@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { createClient } from '@sanity/client'
 
 const sanityToken = (
@@ -20,13 +21,15 @@ const sanityDataset = (
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      message: 'Method not allowed',
-    })
+    return res.status(405).json({ message: 'Method not allowed' })
   }
 
   try {
     const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' })
+    }
 
     const client = createClient({
       projectId: sanityProjectId,
@@ -36,18 +39,21 @@ export default async function handler(req, res) {
       token: sanityToken,
     })
 
+    // Ambil customer berdasarkan email saja dulu
     const customer = await client.fetch(
-      '*[_type == "customer" && email == $email && password == $password][0]',
-      {
-        email: email.trim().toLowerCase(),
-        password,
-      }
+      '*[_type == "customer" && email == $email][0]',
+      { email: email.trim().toLowerCase() }
     )
 
     if (!customer) {
-      return res.status(401).json({
-        message: 'Email or password is incorrect.',
-      })
+      return res.status(401).json({ message: 'Email or password is incorrect.' })
+    }
+
+    // Bandingkan password dengan hash yang tersimpan
+    const isPasswordValid = await bcrypt.compare(password, customer.password)
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Email or password is incorrect.' })
     }
 
     return res.status(200).json({
@@ -60,9 +66,6 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error('Login failed:', error)
-
-    return res.status(500).json({
-      message: error.message,
-    })
+    return res.status(500).json({ message: error.message })
   }
 }
