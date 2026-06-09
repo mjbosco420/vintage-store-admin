@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { createClient } from '@sanity/client'
+import { rateLimit } from './_rateLimit.js'
 
 const sanityToken = (
   process.env.SANITY_SECRET_API_TOKEN ||
@@ -24,6 +25,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown'
+  const { limited } = rateLimit(ip, 'login', 10, 60_000)
+  if (limited) {
+    return res.status(429).json({ message: 'Too many requests. Please try again later.' })
+  }
+
   try {
     const { email, password } = req.body
 
@@ -39,7 +46,6 @@ export default async function handler(req, res) {
       token: sanityToken,
     })
 
-    // Ambil customer berdasarkan email saja dulu
     const customer = await client.fetch(
       '*[_type == "customer" && email == $email][0]',
       { email: email.trim().toLowerCase() }
@@ -49,9 +55,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Email or password is incorrect.' })
     }
 
-    // Bandingkan password dengan hash yang tersimpan
     const isPasswordValid = await bcrypt.compare(password, customer.password)
-
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Email or password is incorrect.' })
     }

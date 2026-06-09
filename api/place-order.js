@@ -1,5 +1,6 @@
 import { createClient } from '@sanity/client'
 import nodemailer from 'nodemailer'
+import { rateLimit } from './_rateLimit.js'
 
 const sanityToken = (process.env.SANITY_SECRET_API_TOKEN || process.env.VITE_SANITY_WRITE_TOKEN || '').trim()
 const sanityTokenSource = process.env.SANITY_SECRET_API_TOKEN
@@ -15,6 +16,12 @@ const emailPass = (process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
+  }
+
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown'
+  const { limited } = rateLimit(ip, 'place-order', 5, 60_000)
+  if (limited) {
+    return res.status(429).json({ message: 'Too many requests. Please try again later.' })
   }
 
   try {
@@ -43,10 +50,7 @@ export default async function handler(req, res) {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
+      auth: { user: emailUser, pass: emailPass },
     })
 
     if (!items || items.length === 0) {
@@ -66,27 +70,19 @@ export default async function handler(req, res) {
     try {
       const rateResponse = await fetch('https://open.er-api.com/v6/latest/USD')
       const rateData = await rateResponse.json()
-      if (rateData?.rates?.IDR) {
-        USD_EXCHANGE_RATE = rateData.rates.IDR
-      }
+      if (rateData?.rates?.IDR) USD_EXCHANGE_RATE = rateData.rates.IDR
     } catch (rateError) {
       console.error('Failed to fetch dynamic exchange rate, using fallback:', rateError)
     }
     console.log(`Using USD exchange rate: ${USD_EXCHANGE_RATE}`)
 
     for (const item of items) {
-      console.log("ITEM ID:", item.id)
-      console.log("ITEM:", JSON.stringify(item, null, 2))
-
       const realProduct = await serverClient.getDocument(item.id)
-
       if (!realProduct) {
         return res.status(404).json({ message: `Product ${item.id} not found` })
       }
-
       const price = Number(realProduct.price) || 0
       calculatedTotal += price * item.quantity
-
       orderItems.push({
         _key: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         productId: item.id,
@@ -94,7 +90,6 @@ export default async function handler(req, res) {
         price: String(price / USD_EXCHANGE_RATE),
         quantity: item.quantity,
       })
-
       emailItems.push({
         name: realProduct.name || realProduct.title || `Item ${item.id}`,
         quantity: item.quantity,
@@ -102,11 +97,10 @@ export default async function handler(req, res) {
       })
     }
 
-    console.log("BEFORE CREATE ORDER")
     const newOrder = await serverClient.create({
       _type: 'order',
       orderNumber: id,
-      customerId: user.id, // Tambahkan baris ini untuk menautkan pesanan ke pengguna
+      customerId: user.id,
       customerName: user?.name || 'Guest',
       customerEmail: user?.email || '',
       shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''),
@@ -117,33 +111,19 @@ export default async function handler(req, res) {
       paymentMethod: paymentMethod || 'Website',
       items: orderItems,
     })
-    console.log("AFTER CREATE ORDER")
-    console.log("NEW ORDER:", JSON.stringify(newOrder, null, 2))
 
     if (user?.email) {
       try {
         const orderDate = new Date(orderedAt || Date.now())
         const formattedDate = new Intl.DateTimeFormat('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZoneName: 'short',
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
         }).format(orderDate)
-
-        const usdFormatter = new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        })
-
+        const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
         const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
-
         const itemsHtml = emailItems
           .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - ${formatUsd(item.price * item.quantity)}</li>`)
           .join('')
-
         await transporter.verify()
         await transporter.sendMail({
           from: `"Vintage Store" <${emailUser}>`,
@@ -155,11 +135,8 @@ export default async function handler(req, res) {
             <p><strong>Payment Method:</strong> ${paymentMethod || 'Website'}</p>
             <p><strong>Shipping Address:</strong> ${shippingAddress || '-'}</p>
             ${notes ? `<p><strong>Customer Notes:</strong> ${notes}</p>` : ''}
-
             <h3>Order Summary:</h3>
-            <ul>
-              ${itemsHtml}
-            </ul>
+            <ul>${itemsHtml}</ul>
             <p><strong>Total Paid:</strong> ${formatUsd(calculatedTotal)}</p>
             <p><strong>Purchase Date:</strong> ${formattedDate}</p>
             <br/>
@@ -167,8 +144,7 @@ export default async function handler(req, res) {
           `,
         })
       } catch (emailError) {
-        console.error('Failed to send order email:', emailError)
-        return res.status(500).json({ message: 'Order created successfully, but confirmation email failed to send. ' + (emailError.message || 'Please check EMAIL_USER / EMAIL_APP_PASSWORD configuration.') })
+        console.error('Failed to send order email (non-fatal):', emailError)
       }
     }
 
@@ -176,23 +152,16 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Order processing failed:', error)
-    console.error("RESPONSE BODY:", error.responseBody)
-    console.error("DETAILS:", error.details)
-
     if (error.statusCode === 401 && error.message.includes('project user not found')) {
       return res.status(500).json({
-        message: `Authentication Error: The Sanity token currently used (starting with ${sanityToken.substring(0, 6)}...) does not have access to project j7s2sxwm. You may have entered a token from a different project.`,
+        message: `Authentication Error: The Sanity token currently used (starting with ${sanityToken.substring(0, 6)}...) does not have access to project j7s2sxwm.`,
       })
     }
-
     if (error.statusCode === 403 || (error.message && error.message.includes('Insufficient permissions'))) {
       return res.status(500).json({
-        message: `Permission Denied: The server token from ${sanityTokenSource} does not have create permission on dataset ${sanityDataset}. Make sure you are using a Sanity server token with write/create permission for project ${sanityProjectId}, not a public viewer token.`,
+        message: `Permission Denied: The server token from ${sanityTokenSource} does not have create permission on dataset ${sanityDataset}.`,
       })
     }
-
-    return res.status(500).json({
-      message: error.message || 'Failed to process order on server.',
-    })
+    return res.status(500).json({ message: error.message || 'Failed to process order on server.' })
   }
 }
