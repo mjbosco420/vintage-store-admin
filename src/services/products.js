@@ -2,7 +2,7 @@ import { client, urlFor } from '../sanity'
 import { createClient } from '@sanity/client'
 import { NEW_DROP_DAYS } from '../constants/shop'
 import { formatPrice } from '../utils/formatters'
-import { getLikedProducts, getSavedLikes } from '../utils/storage'
+import { getLikedProducts, getSavedLikes } from '../utils/storage' // getLikedProducts tetap diimpor untuk fallback
 
 const sanityWriteToken = import.meta.env.VITE_SANITY_WRITE_TOKEN
 
@@ -81,10 +81,31 @@ const sortProducts = (products) => {
 
 export const fetchProducts = async (userId) => {
   const savedLikes = getSavedLikes()
-  const likedProducts = getLikedProducts(userId)
+  
+  let likedProductsMap = {};
+  if (userId) {
+    try {
+      // Fetch the customer document to get their likedProducts array from Sanity
+      const customer = await client.fetch(`*[_type == "customer" && _id == $userId][0]{likedProducts}`, { userId });
+      if (customer?.likedProducts) {
+        likedProductsMap = customer.likedProducts.reduce((acc, productId) => {
+          acc[productId] = true; // Convert array to a map for easy lookup
+          return acc;
+        }, {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch user liked products from Sanity:', error);
+      // Fallback to local storage if Sanity fetch fails for authenticated user
+      likedProductsMap = getLikedProducts(userId);
+    }
+  } else {
+    // For anonymous users, use local storage
+    likedProductsMap = getLikedProducts(userId);
+  }
+
   const products = await client.fetch(PRODUCT_QUERY)
 
-  return sortProducts(products.map((product) => mapProduct(product, savedLikes, likedProducts)))
+  return sortProducts(products.map((product) => mapProduct(product, savedLikes, likedProductsMap)))
 }
 
 export const updateProductLike = async (productId, increment) => {

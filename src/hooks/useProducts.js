@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchProducts, updateProductLike, updateProductViews } from '../services/products'
-import { saveLikedProducts, saveProductLikes } from '../utils/storage'
+import { clearLikedProducts, saveLikedProducts, saveProductLikes } from '../utils/storage' // clearLikedProducts dan saveLikedProducts tetap diimpor untuk fallback
 import { client } from '../sanity'
 
 export const useProducts = (currentUser) => {
@@ -106,8 +106,18 @@ export const useProducts = (currentUser) => {
   const clearWishlist = () => {
     setProducts((current) => {
       const updated = current.map((item) => ({ ...item, isLiked: false }))
-      saveProductLikes(updated)
-      saveLikedProducts(updated, userId)
+      // saveProductLikes(updated) // Ini menyimpan jumlah 'likes' global, bukan 'isLiked' spesifik pengguna
+      
+      // Hapus wishlist pengguna dari Sanity jika terautentikasi, atau dari localStorage jika anonim
+      if (userId) {
+        fetch('/api/update-user-wishlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, action: 'clear' }),
+        }).catch(error => console.error('Failed to clear user wishlist in Sanity:', error));
+      } else {
+        clearLikedProducts(userId); // Hapus dari localStorage untuk pengguna anonim
+      }
       return updated
     })
   }

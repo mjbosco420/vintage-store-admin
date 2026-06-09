@@ -71,7 +71,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Input exceeds maximum length limit' })
     }
 
-    let calculatedTotal = 0
+    let calculatedTotalIdr = 0
     const orderItems = []
     const emailItems = []
 
@@ -89,26 +89,33 @@ export default async function handler(req, res) {
       if (!realProduct) {
         return res.status(404).json({ message: `Product ${item.id} not found` })
       }
-      const price = Number(realProduct.price) || 0
-      calculatedTotal += price * item.quantity
+      const priceIdr = Number(realProduct.price) || 0
+      calculatedTotalIdr += priceIdr * item.quantity
 
       const firstImage = realProduct.images?.[0] || null
       const imageUrl = getImageUrl(firstImage)
+
+      // Menghitung harga USD per item dan dibulatkan paksa ke 2 desimal standar mata uang
+      const priceUsdString = (priceIdr / USD_EXCHANGE_RATE).toFixed(2)
 
       orderItems.push({
         _key: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         productId: item.id,
         productName: realProduct.name || realProduct.title || 'Unknown Product',
-        price: String(price / USD_EXCHANGE_RATE),
+        price: priceUsdString, 
         quantity: item.quantity,
       })
+      
       emailItems.push({
         name: realProduct.name || realProduct.title || `Item ${item.id}`,
         quantity: item.quantity,
-        price: price,
+        priceUsd: Number(priceUsdString), // Simpan dalam format USD yang sudah rapi untuk email
         imageUrl,
       })
     }
+
+    // Hitung total akhir dalam USD berdasarkan pembulatan item
+    const orderTotalUsdString = (calculatedTotalIdr / USD_EXCHANGE_RATE).toFixed(2)
 
     const newOrder = await serverClient.create({
       _type: 'order',
@@ -118,7 +125,7 @@ export default async function handler(req, res) {
       customerEmail: user?.email || '',
       shippingAddress: (shippingAddress || '-').replace(/[<>]/g, ''),
       notes: (notes || '-').replace(/[<>]/g, ''),
-      orderTotal: String(calculatedTotal / USD_EXCHANGE_RATE),
+      orderTotal: orderTotalUsdString,
       orderedAt: orderedAt,
       status: 'new',
       paymentMethod: paymentMethod || 'Website',
@@ -133,9 +140,16 @@ export default async function handler(req, res) {
     const formattedDateShort = new Intl.DateTimeFormat('en-US', {
       year: 'numeric', month: 'long', day: 'numeric',
     }).format(orderDate)
-    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
-    const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
-    const totalFormatted = formatUsd(calculatedTotal)
+    
+    // Formatter USD murni tanpa perlu membagi nilai IDR lagi di dalamnya
+    const usdFormatter = new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+    
+    const totalFormatted = usdFormatter.format(Number(orderTotalUsdString))
 
     const itemsHtmlCustomer = emailItems.map((item) => `
       <tr>
@@ -153,7 +167,7 @@ export default async function handler(req, res) {
                 <p style="margin: 0; font-size: 13px; color: #888;">Qty: ${item.quantity}</p>
               </td>
               <td style="vertical-align: top; text-align: right; white-space: nowrap;">
-                <p style="margin: 0; font-size: 14px; font-weight: 500; color: #111;">${formatUsd(item.price * item.quantity)}</p>
+                <p style="margin: 0; font-size: 14px; font-weight: 500; color: #111;">${usdFormatter.format(item.priceUsd * item.quantity)}</p>
               </td>
             </tr>
           </table>
@@ -161,7 +175,7 @@ export default async function handler(req, res) {
       </tr>
     `).join('')
 
-    const itemsHtmlAdmin = emailItems.map((item) => `<li>${item.name} (x${item.quantity}) — ${formatUsd(item.price * item.quantity)}</li>`).join('')
+    const itemsHtmlAdmin = emailItems.map((item) => `<li>${item.name} (x${item.quantity}) — ${usdFormatter.format(item.priceUsd * item.quantity)}</li>`).join('')
 
     const customerEmailHtml = `
 <!DOCTYPE html>
@@ -172,19 +186,16 @@ export default async function handler(req, res) {
     <tr><td align="center">
       <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;">
 
-        <!-- Header -->
         <tr><td style="background:#0a0a0a;padding:32px;text-align:center;">
           <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:rgba(255,255,255,0.5);">Vintage Stuff</p>
           <p style="margin:0;font-size:22px;color:#ffffff;letter-spacing:0.05em;">Order Confirmed</p>
         </td></tr>
 
-        <!-- Greeting -->
         <tr><td style="padding:28px 32px 20px;border-bottom:1px solid #f0f0f0;">
           <p style="margin:0 0 6px;font-size:13px;color:#888;">Hi, ${user.name || 'there'}</p>
           <p style="margin:0;font-size:15px;color:#111;">Your order has been received and is being processed.</p>
         </td></tr>
 
-        <!-- Order Meta -->
         <tr><td style="padding:20px 32px;border-bottom:1px solid #f0f0f0;">
           <table cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr>
@@ -200,7 +211,6 @@ export default async function handler(req, res) {
           </table>
         </td></tr>
 
-        <!-- Items -->
         <tr><td style="padding:20px 32px;border-bottom:1px solid #f0f0f0;">
           <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#aaa;">Items ordered</p>
           <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -216,7 +226,6 @@ export default async function handler(req, res) {
           </table>
         </td></tr>
 
-        <!-- Delivery Details -->
         <tr><td style="padding:20px 32px;border-bottom:1px solid #f0f0f0;">
           <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#aaa;">Delivery details</p>
           <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -243,7 +252,6 @@ export default async function handler(req, res) {
           </table>
         </td></tr>
 
-        <!-- Footer -->
         <tr><td style="padding:28px 32px;text-align:center;">
           <p style="margin:0 0 6px;font-size:14px;color:#555;">Thank you for shopping with us!</p>
           <p style="margin:0 0 20px;font-size:13px;color:#aaa;">We'll notify you once your order ships.</p>
