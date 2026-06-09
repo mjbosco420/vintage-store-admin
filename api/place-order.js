@@ -13,6 +13,7 @@ const sanityProjectId = (process.env.VITE_SANITY_PROJECT_ID || process.env.SANIT
 const sanityDataset = (process.env.VITE_SANITY_DATASET || process.env.SANITY_DATASET || 'production').trim()
 const emailUser = (process.env.EMAIL_USER || '').trim()
 const emailPass = (process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD || '').replace(/\s+/g, '')
+const adminEmail = (process.env.ADMIN_EMAIL || emailUser).trim()
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -111,19 +112,22 @@ export default async function handler(req, res) {
       items: orderItems,
     })
 
+    const orderDate = new Date(orderedAt || Date.now())
+    const formattedDate = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    }).format(orderDate)
+    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+    const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
+    const itemsHtml = emailItems
+      .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - ${formatUsd(item.price * item.quantity)}</li>`)
+      .join('')
+
+    await transporter.verify()
+
+    // Email ke customer
     if (user?.email) {
       try {
-        const orderDate = new Date(orderedAt || Date.now())
-        const formattedDate = new Intl.DateTimeFormat('en-US', {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-          hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
-        }).format(orderDate)
-        const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
-        const formatUsd = (value) => usdFormatter.format(value / USD_EXCHANGE_RATE)
-        const itemsHtml = emailItems
-          .map((item) => `<li><strong>${item.name}</strong> (x${item.quantity}) - ${formatUsd(item.price * item.quantity)}</li>`)
-          .join('')
-        await transporter.verify()
         await transporter.sendMail({
           from: `"Vintage Store" <${emailUser}>`,
           to: user.email.trim(),
@@ -143,8 +147,40 @@ export default async function handler(req, res) {
           `,
         })
       } catch (emailError) {
-        console.error('Failed to send order email (non-fatal):', emailError)
+        console.error('Failed to send customer email (non-fatal):', emailError)
       }
+    }
+
+    // Email notifikasi ke admin
+    try {
+      await transporter.sendMail({
+        from: `"Vintage Store" <${emailUser}>`,
+        to: adminEmail,
+        subject: `🛒 New Order - ${id}`,
+        html: `
+          <h2>New Order Received!</h2>
+          <p>Order <strong>${id}</strong> has been placed on ${formattedDate}.</p>
+
+          <h3>Customer Info:</h3>
+          <p><strong>Name:</strong> ${user.name || 'Guest'}</p>
+          <p><strong>Email:</strong> ${user.email || '-'}</p>
+          <p><strong>Payment Method:</strong> ${paymentMethod || 'Website'}</p>
+
+          <h3>Shipping Address:</h3>
+          <p>${shippingAddress || '-'}</p>
+
+          ${notes ? `<h3>Customer Notes:</h3><p>${notes}</p>` : ''}
+
+          <h3>Order Items:</h3>
+          <ul>${itemsHtml}</ul>
+          <p><strong>Total:</strong> ${formatUsd(calculatedTotal)}</p>
+
+          <br/>
+          <p><a href="https://vintage-store.sanity.studio/structure/allOrders" style="background:#000;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;">View in Sanity Studio</a></p>
+        `,
+      })
+    } catch (adminEmailError) {
+      console.error('Failed to send admin notification email (non-fatal):', adminEmailError)
     }
 
     return res.status(200).json({ success: true, order: newOrder })
