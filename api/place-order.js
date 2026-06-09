@@ -1,6 +1,7 @@
 import { createClient } from '@sanity/client'
 import nodemailer from 'nodemailer'
 import { rateLimit } from './_rateLimit.js'
+import { checkCsrf } from './_csrf.js'
 
 const sanityToken = (process.env.SANITY_SECRET_API_TOKEN || process.env.VITE_SANITY_WRITE_TOKEN || '').trim()
 const sanityTokenSource = process.env.SANITY_SECRET_API_TOKEN
@@ -18,6 +19,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
+  if (!checkCsrf(req, res)) return
+
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown'
   const { limited } = rateLimit(ip, 'place-order', 5, 60_000)
   if (limited) {
@@ -30,7 +33,6 @@ export default async function handler(req, res) {
     if (!user || !user.id) {
       return res.status(401).json({ message: 'Authentication required to place an order.' })
     }
-
     if (!sanityToken) {
       return res.status(500).json({ message: 'SANITY_SECRET_API_TOKEN or VITE_SANITY_WRITE_TOKEN must be configured for server-side order processing.' })
     }
@@ -64,8 +66,6 @@ export default async function handler(req, res) {
     const orderItems = []
     const emailItems = []
 
-    console.log("ORDER BODY:", JSON.stringify(req.body, null, 2))
-
     let USD_EXCHANGE_RATE = 18129
     try {
       const rateResponse = await fetch('https://open.er-api.com/v6/latest/USD')
@@ -74,7 +74,6 @@ export default async function handler(req, res) {
     } catch (rateError) {
       console.error('Failed to fetch dynamic exchange rate, using fallback:', rateError)
     }
-    console.log(`Using USD exchange rate: ${USD_EXCHANGE_RATE}`)
 
     for (const item of items) {
       const realProduct = await serverClient.getDocument(item.id)

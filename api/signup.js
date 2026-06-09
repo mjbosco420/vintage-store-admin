@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { createClient } from '@sanity/client'
 import { rateLimit } from './_rateLimit.js'
+import { checkCsrf } from './_csrf.js'
 
 const sanityToken = (process.env.SANITY_SECRET_API_TOKEN || '').trim()
 
@@ -16,6 +17,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
+
+  if (!checkCsrf(req, res)) return
 
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown'
   const { limited } = rateLimit(ip, 'signup', 3, 60_000)
