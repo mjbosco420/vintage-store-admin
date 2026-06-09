@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   getCurrentUser,
+  clearLikedProducts, // Import clearLikedProducts
   getUserAccounts,
   saveCurrentUser,
   saveUserAccounts,
@@ -128,6 +129,7 @@ export const useAuth = () => {
   const logout = () => {
     saveCurrentUser(null)
     setCurrentUser(null)
+    clearLikedProducts(null) // Clear anonymous user's local wishlist on logout
     setAuthError('')
   }
 
