@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     } else if (action === 'remove') {
       patchOperation = serverClient
         .patch(userId)
-        .unset([`likedProducts[_eq=="${productId}"]`]);
+        .unset([`likedProducts[@ == "${productId}"]`])
     } else if (action === 'clear') {
       patchOperation = serverClient
         .patch(userId)
