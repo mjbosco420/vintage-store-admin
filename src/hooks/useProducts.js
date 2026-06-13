@@ -1,7 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchProducts, updateProductLike, updateProductViews } from '../services/products'
-import { clearLikedProducts, saveLikedProducts, saveProductLikes } from '../utils/storage' // clearLikedProducts dan saveLikedProducts tetap diimpor untuk fallback
+import { clearLikedProducts, saveLikedProducts, saveProductLikes } from '../utils/storage'
 import { client } from '../sanity'
+
+// Helper untuk update wishlist ke server (user login) atau localStorage (anonim)
+const syncWishlistToStorage = async (userId, productId, action, updatedProducts) => {
+  if (userId) {
+    // User login → simpan ke Sanity via API
+    await fetch('/api/update-user-wishlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, productId, action }),
+    })
+  } else {
+    // User anonim → simpan ke localStorage
+    saveProductLikes(updatedProducts)
+    saveLikedProducts(updatedProducts, userId)
+  }
+}
 
 export const useProducts = (currentUser) => {
   const [products, setProducts] = useState([])
@@ -15,7 +31,6 @@ export const useProducts = (currentUser) => {
 
   const loadProducts = useCallback(async () => {
     setIsLoading(true)
-
     try {
       const data = await fetchProducts(userId)
       setProducts(data)
@@ -27,25 +42,27 @@ export const useProducts = (currentUser) => {
   }, [userId])
 
   useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
+
+  useEffect(() => {
     let isMounted = true
 
-    // Listen for real-time updates from Sanity
     const subscription = client.listen('*[_type == "product"]').subscribe((update) => {
-      if (update && update.result && isMounted) {
-        setProducts((currentProducts) => {
-          return currentProducts.map((product) => {
-            if (product.id === update.result._id) {
-              return {
-                ...product,
-                likes: update.result.likes || 0,
-                views: update.result.views || 0,
-                stock: update.result.stock,
-                isReserved: update.result.isReserved || false,
-              }
-            }
-            return product
-          })
-        })
+      if (update?.result && isMounted) {
+        setProducts((current) =>
+          current.map((product) =>
+            product.id === update.result._id
+              ? {
+                  ...product,
+                  likes: update.result.likes || 0,
+                  views: update.result.views || 0,
+                  stock: update.result.stock,
+                  isReserved: update.result.isReserved || false,
+                }
+              : product
+          )
+        )
       }
     })
 
@@ -55,37 +72,54 @@ export const useProducts = (currentUser) => {
     }
   }, [userId])
 
-  useEffect(() => {
-    loadProducts()
-  }, [loadProducts])
+  // ✅ Dibungkus useCallback agar tidak stale, userId sebagai dependency
+  const handleLike = useCallback(
+    (productId) => {
+      console.log('handleLike called:', { productId, userId })
+      const product = products.find((p) => p.id === productId)
+      if (!product) return
 
-  const handleLike = (productId) => {
-    const product = products.find((p) => p.id === productId)
-    if (!product) return
+      const isNowLiked = !product.isLiked
+      const action = isNowLiked ? 'add' : 'remove'
 
-    const isNowLiked = !product.isLiked
+      // Optimistic update dulu agar UI responsif
+      setProducts((current) => {
+        const updated = current.map((item) => {
+          if (item.id !== productId) return item
+          return {
+            ...item,
+            isLiked: isNowLiked,
+            likes: isNowLiked
+              ? (item.likes || 0) + 1
+              : Math.max(0, (item.likes || 0) - 1),
+          }
+        })
 
-    // Optimistically update local state
-    setProducts((current) => {
-      const updated = current.map((item) => {
-        if (item.id !== productId) return item
-
-        return {
-          ...item,
-          isLiked: isNowLiked,
-          // The exact like count will be eventually synced from the server listener
-          likes: isNowLiked ? (item.likes || 0) + 1 : Math.max(0, (item.likes || 0) - 1),
+        // ✅ localStorage hanya untuk user anonim, sisanya di-handle oleh syncWishlistToStorage
+        if (!userId) {
+          saveProductLikes(updated)
+          saveLikedProducts(updated, userId)
         }
+
+        return updated
       })
 
-      saveProductLikes(updated)
-      saveLikedProducts(updated, userId)
-      return updated
-    })
+      // Update likes count global di product document (semua user)
+      updateProductLike(productId, isNowLiked)
 
-    // Update global likes in Sanity database
-    updateProductLike(productId, isNowLiked)
-  }
+      // ✅ Update likedProducts array di customer document (hanya user login)
+      if (userId) {
+        fetch('/api/update-user-wishlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, productId, action }),
+        }).catch((error) =>
+          console.error('Failed to sync wishlist to server:', error)
+        )
+      }
+    },
+    [products, userId] // products diperlukan untuk find(), userId untuk kondisi
+  )
 
   const handleViewProduct = useCallback(
     (productId) => {
@@ -94,33 +128,37 @@ export const useProducts = (currentUser) => {
 
       setProducts((current) =>
         current.map((item) =>
-          item.id === productId ? { ...item, views: (item.views || 0) + 1 } : item
+          item.id === productId
+            ? { ...item, views: (item.views || 0) + 1 }
+            : item
         )
       )
 
       updateProductViews(productId)
     },
-    [products],
+    [products]
   )
 
-  const clearWishlist = () => {
+  const clearWishlist = useCallback(() => {
     setProducts((current) => {
       const updated = current.map((item) => ({ ...item, isLiked: false }))
-      // saveProductLikes(updated) // Ini menyimpan jumlah 'likes' global, bukan 'isLiked' spesifik pengguna
-      
-      // Hapus wishlist pengguna dari Sanity jika terautentikasi, atau dari localStorage jika anonim
+
       if (userId) {
         fetch('/api/update-user-wishlist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, action: 'clear' }),
-        }).catch(error => console.error('Failed to clear user wishlist in Sanity:', error));
+        }).catch((error) =>
+          console.error('Failed to clear wishlist on server:', error)
+        )
       } else {
-        clearLikedProducts(userId); // Hapus dari localStorage untuk pengguna anonim
+        // ✅ Hanya clear localStorage untuk user anonim
+        clearLikedProducts(userId)
       }
+
       return updated
     })
-  }
+  }, [userId])
 
   return {
     products,

@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (!checkCsrf(req, res)) return
 
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown'
-  const { limited } = rateLimit(ip, 'update-wishlist', 10, 60_000) // 10 requests per minute
+  const { limited } = rateLimit(ip, 'update-wishlist', 10, 60_000)
   if (limited) {
     return res.status(429).json({ message: 'Too many requests. Please try again later.' })
   }
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     if (!userId) {
       return res.status(401).json({ message: 'Authentication required.' })
     }
-    if (!productId && action !== 'clear') { // productId is optional for 'clear' action
+    if (!productId && action !== 'clear') {
       return res.status(400).json({ message: 'Product ID is required for this action.' })
     }
     if (!['add', 'remove', 'clear'].includes(action)) {
@@ -43,19 +43,39 @@ export default async function handler(req, res) {
       token: sanityToken,
     })
 
+    // ✅ Cek apakah document ada sebagai published atau draft
+    const draftId = `drafts.${userId}`
+    const existing = await serverClient.fetch(
+      `{
+        "published": *[_id == $userId][0]{_id},
+        "draft": *[_id == $draftId][0]{_id}
+      }`,
+      { userId, draftId }
+    )
+
+    console.log('Existing document check:', existing) // ← log untuk debug
+
+    // Tentukan ID mana yang harus dipakai
+    let targetId = userId
+    if (!existing.published && existing.draft) {
+      targetId = draftId
+    } else if (!existing.published && !existing.draft) {
+      return res.status(404).json({ message: `Customer document with ID "${userId}" not found in Sanity.` })
+    }
+
     let patchOperation;
     if (action === 'add') {
       patchOperation = serverClient
-        .patch(userId)
+        .patch(targetId)
         .setIfMissing({ likedProducts: [] })
         .insert('after', 'likedProducts[-1]', [productId]);
     } else if (action === 'remove') {
       patchOperation = serverClient
-        .patch(userId)
+        .patch(targetId)
         .unset([`likedProducts[@ == "${productId}"]`])
     } else if (action === 'clear') {
       patchOperation = serverClient
-        .patch(userId)
+        .patch(targetId)
         .set({ likedProducts: [] });
     }
 
