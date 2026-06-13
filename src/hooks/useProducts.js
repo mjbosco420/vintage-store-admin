@@ -168,4 +168,4 @@ export const useProducts = (currentUser) => {
     handleViewProduct,
     clearWishlist,
   }
-}
+}// trigger
